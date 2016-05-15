@@ -235,7 +235,8 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
 
 #[cfg(test)]
 mod test {
-    use collections::Vec;
+    use collections::{Vec, String};
+    use collections::btree_map::BTreeMap;
 
     #[test]
     fn positive_fixint_test() {
@@ -290,5 +291,17 @@ mod test {
                                              0x59,  0x3e,  0xd1, 0xff, 0x17,  0xd0, 0xdf,  0xd1, 0x01, 0x30,
                                              0x4c, 0x5a, 0x17, 0x6c, 0x2d,
                                              0xfd, 0x02]);
+    }
+
+    #[test]
+    fn fixmap_test() {
+        let mut map: BTreeMap<String, usize> = BTreeMap::new();
+        map.insert("one".into(), 1);
+        map.insert("two".into(), 2);
+        map.insert("three".into(), 3);
+        assert_eq!(::to_bytes(map).unwrap(), &[0x83,
+                                               0xa3, 0x6f, 0x6e, 0x65,  0x01,
+                                               0xa5, 0x74, 0x68, 0x72, 0x65, 0x65,  0x03,
+                                               0xa3, 0x74, 0x77, 0x6f,  0x02]);
     }
 }

@@ -253,6 +253,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
 #[cfg(test)]
 mod test {
     use collections::{String, Vec};
+    use collections::btree_map::BTreeMap;
 
     #[test]
     fn positive_fixint_test() {
@@ -288,6 +289,39 @@ mod test {
         fixture.extend_from_slice(s.as_bytes());
         let value: String = ::from_bytes(fixture.as_slice()).unwrap();
         assert_eq!(value, s);
+    }
+
+    #[test]
+    fn fixarr_test() {
+        let v: Vec<u8> = ::from_bytes(&[0x94, 0x05, 0x08, 0x14, 0xcc, 0xe7]).unwrap();
+        assert_eq!(v, &[5, 8, 20, 231]);
+    }
+
+    #[test]
+    fn array16_test() {
+        let v: Vec<isize> = ::from_bytes(&[0xdc,
+                                           0x00, 0x11,
+                                           0xfb,  0x10,  0x65,  0xd0, 0xd3,  0xcc, 0xb8,
+                                           0x59,  0x3e,  0xd1, 0xff, 0x17,  0xd0, 0xdf,  0xd1, 0x01, 0x30,
+                                           0x4c, 0x5a, 0x17, 0x6c, 0x2d,
+                                           0xfd, 0x02]).unwrap();
+
+        assert_eq!(v, &[-5, 16, 101, -45, 184,
+                       89, 62, -233, -33, 304,
+                       76, 90, 23, 108, 45,
+                       -3, 2]);
+    }
+
+    #[test]
+    fn fixmap_test() {
+        let mut map: BTreeMap<String, usize> = ::from_bytes(&[0x83,
+                                                              0xa3, 0x6f, 0x6e, 0x65,  0x01,
+                                                              0xa5, 0x74, 0x68, 0x72, 0x65, 0x65,  0x03,
+                                                              0xa3, 0x74, 0x77, 0x6f,  0x02]).unwrap();
+        assert_eq!(map.remove(&format!("one")), Some(1));
+        assert_eq!(map.remove(&format!("two")), Some(2));
+        assert_eq!(map.remove(&format!("three")), Some(3));
+        assert!(map.is_empty());
     }
 }
 
