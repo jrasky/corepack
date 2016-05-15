@@ -43,7 +43,7 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         } else if value >= i8::min_value() as i64 && value <= i8::max_value() as i64 {
             self.output(&[INT8, unsafe {mem::transmute(value as i8)}])
         } else if value >= 0 && value <= u8::max_value() as i64 {
-            self.output(&[UINT8, unsafe {mem::transmute(value as i8)}])
+            self.output(&[UINT8, unsafe {mem::transmute(value as u8)}])
         } else if value >= i16::min_value() as i64 && value <= i16::max_value() as i64 {
             let mut buf = [INT16; U16_BYTES + 1];
             BigEndian::write_i16(&mut buf[1..], value as i16);
