@@ -1,3 +1,5 @@
+#![feature(inclusive_range)]
+#![feature(inclusive_range_syntax)]
 #![feature(fn_traits)]
 #![feature(unboxed_closures)]
 #![feature(collections)]

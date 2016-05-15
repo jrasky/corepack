@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::ops::RangeInclusive;
 
 // fixint limits
 pub const FIXINT_MAX: u8 = 0b01111111;
@@ -26,10 +26,10 @@ pub const MAX_BIN16: usize = 0xffff;
 pub const MAX_BIN32: usize = 0xffff_ffff;
 
 // byte defs
-pub const POS_FIXINT: Range<u8> = 0x00..0x7f;
-pub const FIXMAP: Range<u8> = 0x80..0x8f;
-pub const FIXARRAY: Range<u8> = 0x90..0x9f;
-pub const FIXSTR: Range<u8> = 0xa0..0xbf;
+pub const POS_FIXINT: RangeInclusive<u8> = 0x00...0x7f;
+pub const FIXMAP: RangeInclusive<u8> = 0x80...0x8f;
+pub const FIXARRAY: RangeInclusive<u8> = 0x90...0x9f;
+pub const FIXSTR: RangeInclusive<u8> = 0xa0...0xbf;
 
 pub const NIL: u8 = 0xc0;
 // RESERVED: 0xc1
@@ -64,7 +64,7 @@ pub const ARRAY32: u8 = 0xdd;
 pub const MAP16: u8 = 0xde;
 pub const MAP32: u8 = 0xdf;
 
-pub const NEG_FIXINT: Range<u8> = 0xe0..0xff;
+pub const NEG_FIXINT: RangeInclusive<u8> = 0xe0...0xff;
 
 // bit masks
 pub const FIXMAP_MASK: u8 = 0b1000_0000;
