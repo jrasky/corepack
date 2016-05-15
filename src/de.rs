@@ -76,6 +76,17 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> serde::de::MapVisitor for Seq
     }
 }
 
+impl<F: FnMut(&mut [u8]) -> Result<(), Error>> serde::Deserializer for Deserializer<F> {
+    type Error = Error;
+
+    fn deserialize<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        let mut buf = [0];
+        try!(self.input(&mut buf));
+        self.parse_as(visitor, buf[0])
+    }
+}
+
 impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
     pub const fn new(input: F) -> Deserializer<F> {
         Deserializer {
@@ -86,17 +97,10 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
     fn input(&mut self, buf: &mut [u8]) -> Result<(), Error> {
         self.input.call_mut((buf,))
     }
-}
 
-impl<F: FnMut(&mut [u8]) -> Result<(), Error>> serde::Deserializer for Deserializer<F> {
-    type Error = Error;
-
-    fn deserialize<V>(&mut self, mut visitor: V) -> Result<V::Value, Error>
+    fn parse_as<V>(&mut self, mut visitor: V, ty: u8) -> Result<V::Value, Error> 
         where V: serde::de::Visitor {
-        let mut buf = [0];
-        try!(self.input(&mut buf));
-
-        match buf[0] {
+        match ty {
             v if POS_FIXINT.contains(v) => {
                 visitor.visit_u8(v)
             }
@@ -104,15 +108,15 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> serde::Deserializer for Deseriali
                 visitor.visit_i8(unsafe {mem::transmute(v)})
             }
             v if FIXMAP.contains(v) => {
-                let size = (buf[0] & !FIXMAP_MASK) as usize * 2;
+                let size = (v & !FIXMAP_MASK) as usize * 2;
                 visitor.visit_map(SeqVisitor::new(self, size))
             }
             v if FIXARRAY.contains(v) => {
-                let size = (buf[0] & !FIXARRAY_MASK) as usize;
+                let size = (v & !FIXARRAY_MASK) as usize;
                 visitor.visit_seq(SeqVisitor::new(self, size))
             }
             v if FIXSTR.contains(v) => {
-                let mut buf = vec![0; (buf[0] & !FIXSTR_MASK) as usize];
+                let mut buf = vec![0; (v & !FIXSTR_MASK) as usize];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_string(
                     try!(String::from_utf8(buf)
