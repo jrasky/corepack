@@ -249,3 +249,45 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use collections::{String, Vec};
+
+    #[test]
+    fn positive_fixint_test() {
+        let value: u8 = ::from_bytes(&[0x17]).unwrap();
+        assert_eq!(value, 23);
+    }
+
+    #[test]
+    fn negative_fixint_test() {
+        let value: i8 = ::from_bytes(&[0xfb]).unwrap();
+        assert_eq!(value, -5);
+    }
+
+    #[test]
+    fn uint8_test() {
+        let value: u8 = ::from_bytes(&[0xcc, 0x9a]).unwrap();
+        assert_eq!(value, 154);
+    }
+
+    #[test]
+    fn fixstr_test() {
+        let value: String = ::from_bytes(&[0xac, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20,
+                                           0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21]).unwrap();
+        assert_eq!(value, "Hello World!");
+    }
+
+    #[test]
+    fn str8_test() {
+        let s: &str = "The quick brown fox jumps over the lazy dog";
+        let mut fixture: Vec<u8> = vec![];
+        fixture.push(0xd9);
+        fixture.push(s.len() as u8);
+        fixture.extend_from_slice(s.as_bytes());
+        let value: String = ::from_bytes(fixture.as_slice()).unwrap();
+        assert_eq!(value, s);
+    }
+}
+

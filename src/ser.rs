@@ -38,17 +38,27 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
     }
 
     fn serialize_i64(&mut self, value: i64) -> Result {
-        if value >= FIXINT_MIN as i64 && value < 0 {
+        if value >= FIXINT_MIN as i64 && value <= FIXINT_MAX as i64 {
             self.output(&[unsafe {mem::transmute(value as i8)}])
         } else if value >= i8::min_value() as i64 && value <= i8::max_value() as i64 {
             self.output(&[INT8, unsafe {mem::transmute(value as i8)}])
+        } else if value >= 0 && value <= u8::max_value() as i64 {
+            self.output(&[UINT8, unsafe {mem::transmute(value as i8)}])
         } else if value >= i16::min_value() as i64 && value <= i16::max_value() as i64 {
             let mut buf = [INT16; U16_BYTES + 1];
             BigEndian::write_i16(&mut buf[1..], value as i16);
             self.output(&buf)
+        } else if value >= 0 && value <= u16::max_value() as i64 {
+            let mut buf = [UINT16; U16_BYTES + 1];
+            BigEndian::write_u16(&mut buf[1..], value as u16);
+            self.output(&buf)
         } else if value >= i32::min_value() as i64 && value <= i32::max_value() as i64 {
             let mut buf = [INT32; U32_BYTES + 1];
             BigEndian::write_i32(&mut buf[1..], value as i32);
+            self.output(&buf)
+        } else if value >= 0 && value <= u32::max_value() as i64 {
+            let mut buf = [UINT32; U16_BYTES + 1];
+            BigEndian::write_u32(&mut buf[1..], value as u32);
             self.output(&buf)
         } else {
             let mut buf = [INT64; U64_BYTES + 1];
@@ -91,7 +101,7 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
 
     fn serialize_str(&mut self, value: &str) -> Result {
         if value.len() <= MAX_FIXSTR {
-            try!(self.output(&[value.len() as u8 & FIXSTR_MASK]));
+            try!(self.output(&[value.len() as u8 | FIXSTR_MASK]));
         } else if value.len() <= MAX_STR8 {
             try!(self.output(&[STR8, value.len() as u8]));
         } else if value.len() <= MAX_STR16 {
@@ -127,7 +137,7 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
 
         if let Some(size) = visitor.len() {
             if size <= MAX_FIXARRAY {
-                try!(self.output(&[size as u8 & FIXARRAY_MASK]));
+                try!(self.output(&[size as u8 | FIXARRAY_MASK]));
             } else if size <= MAX_ARRAY16 {
                 let mut buf = [ARRAY16; U16_BYTES + 1];
                 BigEndian::write_u16(&mut buf[1..], size as u16);
@@ -167,7 +177,7 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         where V: serde::ser::MapVisitor {
         if let Some(size) = visitor.len() {
             if size <= MAX_FIXMAP {
-                try!(self.output(&[size as u8 & FIXMAP_MASK]));
+                try!(self.output(&[size as u8 | FIXMAP_MASK]));
             } else if size <= MAX_MAP16 {
                 let mut buf = [MAP16; U16_BYTES + 1];
                 BigEndian::write_u16(&mut buf[1..], size as u16);
@@ -220,5 +230,65 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         }
 
         self.output(value)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use collections::Vec;
+
+    #[test]
+    fn positive_fixint_test() {
+        let v: u8 = 23;
+        assert_eq!(::to_bytes(v).unwrap(), &[0x17]);
+    }
+
+    #[test]
+    fn negative_fixint_test() {
+        let v: i8 = -5;
+        assert_eq!(::to_bytes(v).unwrap(), &[0xfb]);
+    }
+
+    #[test]
+    fn uint8_test() {
+        let v: u8 = 154;
+        assert_eq!(::to_bytes(v).unwrap(), &[0xcc, 0x9a]);
+    }
+
+    #[test]
+    fn fixstr_test() {
+        let s: &str = "Hello World!";
+        assert_eq!(::to_bytes(s).unwrap(), &[0xac, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20,
+                                             0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21]);
+    }
+
+    #[test]
+    fn str8_test() {
+        let s: &str = "The quick brown fox jumps over the lazy dog";
+        let mut fixture: Vec<u8> = vec![];
+        fixture.push(0xd9);
+        fixture.push(s.len() as u8);
+        fixture.extend_from_slice(s.as_bytes());
+        assert_eq!(::to_bytes(s).unwrap(), fixture);
+    }
+
+    #[test]
+    fn fixarr_test() {
+        let v: Vec<u8> = vec![5, 8, 20, 231];
+        assert_eq!(::to_bytes(v).unwrap(), &[0x94, 0x05, 0x08, 0x14, 0xcc, 0xe7]);
+    }
+
+    #[test]
+    fn array16_test() {
+        let v: Vec<isize> = vec![-5, 16, 101, -45, 184,
+                                 89, 62, -233, -33, 304,
+                                 76, 90, 23, 108, 45,
+                                 -3, 2];
+        assert_eq!(::to_bytes(v).unwrap(), &[0xdc,
+                                             0x00, 0x11,
+                                             0xfb,  0x10,  0x65,  0xd0, 0xd3,  0xcc, 0xb8,
+                                             0x59,  0x3e,  0xd1, 0xff, 0x17,  0xd0, 0xdf,  0xd1, 0x01, 0x30,
+                                             0x4c, 0x5a, 0x17, 0x6c, 0x2d,
+                                             0xfd, 0x02]);
     }
 }
