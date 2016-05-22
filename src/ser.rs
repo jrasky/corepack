@@ -21,6 +21,40 @@ impl<F: FnMut(&[u8]) -> Result> Serializer<F> {
         }
     }
 
+    pub fn serialize_ext(&mut self, ty: i8, data: &[u8]) -> Result {
+        let ty: u8 = unsafe {mem::transmute(ty)};
+        if data.len() == 1 {
+            self.output(&[FIXEXT1, ty, data[0]])
+        } else if data.len() == 2 {
+            self.output(&[FIXEXT2, ty, data[0], data[1]])
+        } else if data.len() == 4 {
+            self.output(&[FIXEXT4, ty, data[0], data[1], data[2], data[3]])
+        } else if data.len() == 8 {
+            try!(self.output(&[FIXEXT8, ty]));
+            self.output(data)
+        } else if data.len() == 16 {
+            try!(self.output(&[FIXEXT16, ty]));
+            self.output(data)
+        } else if data.len() < u8::max_value() as usize {
+            try!(self.output(&[EXT8, data.len() as u8, ty]));
+            self.output(data)
+        } else if data.len() < u16::max_value() as usize {
+            let mut buf = [EXT16; U16_BYTES + 2];
+            BigEndian::write_u16(&mut buf[1..], data.len() as u16);
+            buf[3] = ty;
+            try!(self.output(&buf));
+            self.output(data)
+        } else if data.len() < u32::max_value() as usize {
+            let mut buf = [EXT32; U32_BYTES + 2];
+            BigEndian::write_u32(&mut buf[1..], data.len() as u32);
+            buf[5] = ty;
+            try!(self.output(&buf));
+            self.output(data)
+        } else {
+            Err(serde::Error::invalid_length(data.len()))
+        }
+    }
+
     fn output(&mut self, buf: &[u8]) -> Result {
         self.output.call_mut((buf,))
     }

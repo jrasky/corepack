@@ -1,4 +1,4 @@
-use collections::String;
+use collections::{String, Vec};
 
 use std::mem;
 
@@ -6,6 +6,7 @@ use byteorder::{ByteOrder, BigEndian};
 
 use serde;
 
+use generic::{Generic, GenericVisitor};
 use defs::*;
 use error::*;
 
@@ -18,12 +19,61 @@ struct SeqVisitor<'a, F: 'a + FnMut(&mut [u8]) -> Result<(), Error>> {
     count: usize
 }
 
+struct ExtVisitor {
+    state: u8,
+    ty: i8,
+    data: Vec<u8>
+}
+
 impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> SeqVisitor<'a, F> {
     fn new(de: &'a mut Deserializer<F>, count: usize) -> SeqVisitor<'a, F> {
         SeqVisitor {
             de: de,
             count: count
         }
+    }
+}
+
+impl serde::de::MapVisitor for ExtVisitor {
+    type Error = Error;
+
+    fn visit_key<T>(&mut self) -> Result<Option<T>, Error> where T: serde::Deserialize {
+        if self.state == 0 {
+            let mut de = serde::de::value::ValueDeserializer::<Error>::into_deserializer("type");
+            Ok(Some(try!(T::deserialize(&mut de))))
+        } else if self.state == 1 {
+            let mut de = serde::de::value::ValueDeserializer::<Error>::into_deserializer("data");
+            Ok(Some(try!(T::deserialize(&mut de))))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn visit_value<T>(&mut self) -> Result<T, Error> where T: serde::Deserialize {
+        if self.state == 0 {
+            self.state += 1;
+            let mut de = serde::de::value::ValueDeserializer::<Error>::into_deserializer(self.ty);
+            Ok(try!(T::deserialize(&mut de)))
+        } else if self.state == 1 {
+            self.state += 1;
+            let mut de = serde::de::value::ValueDeserializer::<Error>::into_deserializer(
+                serde::bytes::Bytes::from(self.data.as_slice()));
+            Ok(try!(T::deserialize(&mut de)))
+        } else {
+            Err(serde::de::Error::end_of_stream())
+        }
+    }
+
+    fn end(&mut self) -> Result<(), Error> {
+        if self.state > 1 {
+            Ok(())
+        } else {
+            Err(serde::de::Error::invalid_length(2 - self.state as usize))
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (2 - self.state as usize, Some(2 - self.state as usize))
     }
 }
 
@@ -94,6 +144,85 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
         }
     }
 
+    pub fn deserialize_generic(&mut self) -> Result<Generic, Error> {
+        let mut visitor = GenericVisitor;
+        let mut buf = [0];
+        try!(self.input(&mut buf));
+        match buf[0] {
+            EXT8 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let size = buf[0] as usize;
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; size];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            EXT16 => {
+                let mut buf = [0; U16_BYTES];
+                try!(self.input(&mut buf));
+                let size = BigEndian::read_u16(&buf) as usize;
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; size];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            EXT32 => {
+                let mut buf = [0; U32_BYTES];
+                try!(self.input(&mut buf));
+                let size = BigEndian::read_u32(&buf) as usize;
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; size];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            FIXEXT1 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            FIXEXT2 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 2];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            FIXEXT4 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 4];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            FIXEXT8 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 8];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            FIXEXT16 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 16];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_ext(ty, buf)
+            },
+            ty => self.parse_as(visitor, ty)
+        }
+    }
+
     fn input(&mut self, buf: &mut [u8]) -> Result<(), Error> {
         self.input.call_mut((buf,))
     }
@@ -146,8 +275,47 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_byte_buf(buf)
             }
-            EXT8 | EXT16 | EXT32 => {
-                Err(Error::simple(Reason::BadType))
+            EXT8 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let size = buf[0] as usize;
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; size];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
+            }
+            EXT16 => {
+                let mut buf = [0; U16_BYTES];
+                try!(self.input(&mut buf));
+                let size = BigEndian::read_u16(&buf) as usize;
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; size];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
+            }
+            EXT32 => {
+                let mut buf = [0; U32_BYTES];
+                try!(self.input(&mut buf));
+                let size = BigEndian::read_u32(&buf) as usize;
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; size];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
             }
             UINT8 => {
                 let mut buf = [0];
@@ -189,8 +357,65 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
                 try!(self.input(&mut buf));
                 visitor.visit_i64(BigEndian::read_i64(&buf))
             }
-            FIXEXT1 | FIXEXT2 | FIXEXT4 | FIXEXT8 | FIXEXT16 => {
-                Err(Error::simple(Reason::BadType))
+            FIXEXT1 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
+            }
+            FIXEXT2 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 2];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
+            }
+            FIXEXT4 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 4];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
+            }
+            FIXEXT8 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 8];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
+            }
+            FIXEXT16 => {
+                let mut buf = [0];
+                try!(self.input(&mut buf));
+                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let mut buf = vec![0; 16];
+                try!(self.input(buf.as_mut_slice()));
+                visitor.visit_map(ExtVisitor {
+                    state: 0,
+                    ty: ty,
+                    data: buf
+                })
             }
             STR8 => {
                 let mut buf = [0];
