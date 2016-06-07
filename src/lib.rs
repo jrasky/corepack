@@ -8,7 +8,8 @@
 #![feature(const_fn)]
 #![feature(box_syntax)]
 #![allow(overflowing_literals)]
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
+#[cfg(not(feature = "std"))]
 extern crate core as std;
 extern crate serde;
 extern crate byteorder;

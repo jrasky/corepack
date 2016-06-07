@@ -6,8 +6,6 @@ use alloc::boxed::Box;
 
 use std::fmt;
 
-use serde;
-
 #[derive(Debug, Clone, Copy)]
 pub enum Reason {
     TooBig,
@@ -29,7 +27,10 @@ pub enum Reason {
 pub struct Error {
     reason: Reason,
     detail: String,
-    cause: Option<Box<serde::error::Error>>
+    #[cfg(not(feature = "std"))]
+    cause: Option<Box<::serde::error::Error>>,
+    #[cfg(feature = "std")]
+    cause: Option<Box<::std::error::Error>>
 }
 
 impl Display for Error {
@@ -59,7 +60,17 @@ impl Display for Error {
 }
 
 impl Error {
-    pub const fn chain(reason: Reason, detail: String, cause: Option<Box<serde::error::Error>>) -> Error {
+    #[cfg(not(feature = "std"))]
+    pub const fn chain(reason: Reason, detail: String, cause: Option<Box<::serde::error::Error>>) -> Error {
+        Error {
+            reason: reason,
+            detail: detail,
+            cause: cause
+        }
+    }
+
+    #[cfg(feature = "std")]
+    pub const fn chain(reason: Reason, detail: String, cause: Option<Box<::std::error::Error>>) -> Error {
         Error {
             reason: reason,
             detail: detail,
@@ -76,12 +87,13 @@ impl Error {
     }
 }
 
-impl serde::error::Error for Error {
+#[cfg(not(feature = "std"))]
+impl ::serde::error::Error for Error {
     fn description(&self) -> &str {
         "Corepack error"
     }
 
-    fn cause(&self) -> Option<&serde::error::Error> {
+    fn cause(&self) -> Option<&::serde::error::Error> {
         if let Some(ref e) = self.cause {
             Some(e.as_ref())
         } else {
@@ -90,7 +102,22 @@ impl serde::error::Error for Error {
     }
 }
 
-impl serde::ser::Error for Error {
+#[cfg(feature = "std")]
+impl ::std::error::Error for Error {
+    fn description(&self) -> &str {
+        "Corepack error"
+    }
+
+    fn cause(&self) -> Option<&::std::error::Error> {
+        if let Some(ref e) = self.cause {
+            Some(e.as_ref())
+        } else {
+            None
+        }
+    }
+}
+
+impl ::serde::ser::Error for Error {
     fn custom<T: Into<String>>(msg: T) -> Error {
         Error::new(Reason::Other, msg.into())
     }
@@ -100,16 +127,16 @@ impl serde::ser::Error for Error {
     }
 }
 
-impl serde::de::Error for Error {
+impl ::serde::de::Error for Error {
     fn custom<T: Into<String>>(msg: T) -> Error {
-        serde::ser::Error::custom(msg)
+        ::serde::ser::Error::custom(msg)
     }
 
     fn end_of_stream() -> Error {
         Error::simple(Reason::EndOfStream)
     }
 
-    fn invalid_type(ty: serde::de::Type) -> Error {
+    fn invalid_type(ty: ::serde::de::Type) -> Error {
         Error::new(Reason::BadType, format!("Expected {:?}", ty))
     }
 
