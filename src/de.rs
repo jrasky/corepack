@@ -135,6 +135,156 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> serde::Deserializer for Deseriali
         try!(self.input(&mut buf));
         self.parse_as(visitor, buf[0])
     }
+
+    fn deserialize_bool<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_u64<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_usize<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_u64(visitor)
+    }
+
+    fn deserialize_u8<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_u64(visitor)
+    }
+
+    fn deserialize_u16<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_u64(visitor)
+    }
+
+    fn deserialize_u32<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_u64(visitor)
+    }
+
+    fn deserialize_i64<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_isize<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_i64(visitor)
+    }
+
+    fn deserialize_i8<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_i64(visitor)
+    }
+
+    fn deserialize_i16<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_i64(visitor)
+    }
+
+    fn deserialize_i32<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_i64(visitor)
+    }
+
+    fn deserialize_f64<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_f32<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_f64(visitor)
+    }
+
+    fn deserialize_str<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_char<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_string<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_unit<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_option<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_seq<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_seq_fixed_size<V>(&mut self, _: usize, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_seq(visitor)
+    }
+
+    fn deserialize_bytes<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_map<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_unit_struct<V>(&mut self, _: &'static str, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_unit(visitor)
+    }
+
+    fn deserialize_newtype_struct<V>(&mut self, _: &'static str, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_tuple_struct<V>(&mut self, _: &'static str, len: usize, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_tuple(len, visitor)
+    }
+
+    fn deserialize_struct<V>(&mut self, _: &'static str, _: &'static [&'static str], visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_map(visitor)
+    }
+
+    fn deserialize_struct_field<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_tuple<V>(&mut self, len: usize, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize_seq_fixed_size(len, visitor)
+    }
+
+    fn deserialize_enum<V>(&mut self, _: &'static str, _: &'static [&'static str], _: V) -> Result<V::Value, Error>
+        where V: serde::de::EnumVisitor {
+        Err(serde::Error::invalid_type(serde::de::Type::Enum))
+    }
+
+    fn deserialize_ignored_any<V>(&mut self, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        self.deserialize(visitor)
+    }
 }
 
 impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {

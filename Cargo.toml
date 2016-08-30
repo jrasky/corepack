@@ -4,8 +4,8 @@ version = "0.1.0"
 authors = ["Jerome Rasky <jyrome.112@gmail.com>"]
 
 [dependencies]
-serde = { version = "*", git = "https://github.com/serde-rs/serde", default-features = false, features = ["collections"] }
-byteorder = { version = "*", default-features = false }
+serde = { version = "0.8.4", default-features = false, features = ["collections"] }
+byteorder = { version = "0.5.3", default-features = false }
 
 [features]
 default = []

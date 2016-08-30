@@ -6,7 +6,6 @@ use alloc::boxed::Box;
 use collections::{String, Vec};
 
 use serde::{Serialize, Deserialize, Serializer, Deserializer, Error};
-use serde::ser::impls::{SeqIteratorVisitor, MapIteratorVisitor};
 use serde::de::value::ValueDeserializer;
 
 use serde::{ser, de, bytes};
@@ -44,7 +43,11 @@ struct ExtVisitor<'a> {
     data: &'a [u8]
 }
 
-struct MapGeneric(Vec<(Generic, Generic)>);
+struct MapGeneric {
+    keys: VecGeneric,
+    values: VecGeneric,
+}
+
 struct VecGeneric(Vec<Generic>);
 
 pub struct GenericVisitor;
@@ -120,24 +123,6 @@ impl<I: Iterator<Item=(Generic, Generic)>> de::MapVisitor for MapVisitor<I> {
     }
 }
 
-impl<'a> ser::MapVisitor for ExtVisitor<'a> {
-    fn visit<S>(&mut self, s: &mut S) -> Result<Option<()>, S::Error> where S: Serializer {
-        if self.state == 0 {
-            self.state += 1;
-            s.serialize_struct_elt("type", self.ty).map(|ok| Some(ok))
-        } else if self.state == 1 {
-            self.state += 1;
-            s.serialize_struct_elt("data", self.data).map(|ok| Some(ok))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn len(&self) -> Option<usize> {
-        Some(2)
-    }
-}
-
 impl<'a> de::MapVisitor for ExtVisitor<'a> {
     type Error = error::Error;
 
@@ -177,20 +162,6 @@ impl<'a> de::MapVisitor for ExtVisitor<'a> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (2 - self.state as usize, Some(2 - self.state as usize))
-    }
-}
-
-impl Deref for MapGeneric {
-    type Target = Vec<(Generic, Generic)>;
-
-    fn deref(&self) -> &Vec<(Generic, Generic)> {
-        &self.0
-    }
-}
-
-impl DerefMut for MapGeneric {
-    fn deref_mut(&mut self) -> &mut Vec<(Generic, Generic)> {
-        &mut self.0
     }
 }
 
@@ -308,17 +279,27 @@ impl Serialize for Generic {
             &F64(f) => s.serialize_f64(f),
             &Bin(ref b) => s.serialize_bytes(b),
             &Str(ref st) => s.serialize_str(st),
-            &Array(ref a) => s.serialize_seq(SeqIteratorVisitor::new(
-                a.iter(), Some(a.len())
-            )),
-            &Map(ref m) => s.serialize_map(MapIteratorVisitor::new(
-                m.iter().cloned(), Some(m.len())
-            )),
-            &Ext(ty, ref data) => s.serialize_struct("Ext", ExtVisitor {
-                ty: ty,
-                state: 0,
-                data: data
-            })
+            &Array(ref a) => {
+                let mut state = try!(s.serialize_seq(Some(a.len())));
+                for item in a.iter().cloned() {
+                    try!(s.serialize_seq_elt(&mut state, item));
+                }
+                s.serialize_seq_end(state)
+            },
+            &Map(ref m) => {
+                let mut state = try!(s.serialize_map(Some(m.len())));
+                for (key, value) in m.iter().cloned() {
+                    try!(s.serialize_map_key(&mut state, key));
+                    try!(s.serialize_map_value(&mut state, value));
+                }
+                s.serialize_map_end(state)
+            },
+            &Ext(ty, ref data) => {
+                let mut state = try!(s.serialize_struct("Ext", 2));
+                try!(s.serialize_struct_elt(&mut state, "type", ty));
+                try!(s.serialize_struct_elt(&mut state, "data", data));
+                s.serialize_struct_end(state)
+            }
         }
     }
 }
@@ -359,76 +340,170 @@ impl de::Deserializer for Generic {
             })
         }
     }
-}
 
-impl ser::Serializer for MapGeneric {
-    type Error = error::Error;
-
-    fn serialize_map_elt<K, V>(&mut self, key: K, value: V) -> Result<(), error::Error> where K: Serialize, V: Serialize {
-        let mut buf = VecGeneric(vec![]);
-
-        try!(value.serialize(&mut buf));
-        try!(key.serialize(&mut buf));
-
-        if buf.len() != 2 {
-            return Err(ser::Error::invalid_value("Key and Value did not serialize to exactly one item each"));
-        }
-
-        let key = buf.pop().unwrap();
-        let value = buf.pop().unwrap();
-
-        self.push((key, value));
-
-        Ok(())
+    
+    fn deserialize_bool<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
     }
 
-    fn serialize_bool(&mut self, _: bool) -> Result<(), error::Error> {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_u64<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
     }
 
-    fn serialize_i64(&mut self, _: i64) -> Result<(), error::Error> {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_usize<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_u64(visitor)
     }
 
-    fn serialize_u64(&mut self, _: u64) -> Result<(), error::Error> {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_u8<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_u64(visitor)
     }
 
-    fn serialize_f64(&mut self, _: f64) -> Result<(), error::Error> {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_u16<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_u64(visitor)
     }
 
-    fn serialize_str(&mut self, _: &str) -> Result<(), error::Error> {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_u32<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_u64(visitor)
     }
 
-    fn serialize_unit(&mut self) -> Result<(), error::Error> {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_i64<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
     }
 
-    fn serialize_none(&mut self) -> Result<(), error::Error> {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_isize<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_i64(visitor)
     }
 
-    fn serialize_some<V>(&mut self, _: V) -> Result<(), error::Error> where V: Serialize {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_i8<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_i64(visitor)
     }
 
-    fn serialize_seq<V>(&mut self, _: V) -> Result<(), error::Error> where V: ser::SeqVisitor {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_i16<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_i64(visitor)
     }
 
-    fn serialize_seq_elt<T>(&mut self, _: T) -> Result<(), error::Error> where T: Serialize {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_i32<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_i64(visitor)
     }
 
-    fn serialize_map<V>(&mut self, _: V) -> Result<(), error::Error> where V: ser::MapVisitor {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn deserialize_f64<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_f32<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_f64(visitor)
+    }
+
+    fn deserialize_str<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_char<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_string<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_unit<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_option<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_seq<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_seq_fixed_size<V>(&mut self, _: usize, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_seq(visitor)
+    }
+
+    fn deserialize_bytes<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_map<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_unit_struct<V>(&mut self, _: &'static str, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_unit(visitor)
+    }
+
+    fn deserialize_newtype_struct<V>(&mut self, _: &'static str, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_tuple_struct<V>(&mut self, _: &'static str, len: usize, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_tuple(len, visitor)
+    }
+
+    fn deserialize_struct<V>(&mut self, _: &'static str, _: &'static [&'static str], visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_map(visitor)
+    }
+
+    fn deserialize_struct_field<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
+    }
+
+    fn deserialize_tuple<V>(&mut self, len: usize, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize_seq_fixed_size(len, visitor)
+    }
+
+    fn deserialize_enum<V>(&mut self, _: &'static str, _: &'static [&'static str], _: V) -> Result<V::Value, error::Error>
+        where V: de::EnumVisitor {
+        Err(error::Error::invalid_type(de::Type::Enum))
+    }
+
+    fn deserialize_ignored_any<V>(&mut self, visitor: V) -> Result<V::Value, error::Error>
+        where V: de::Visitor {
+        self.deserialize(visitor)
     }
 }
 
 impl ser::Serializer for VecGeneric {
     type Error = error::Error;
+
+    type SeqState = VecGeneric;
+    type TupleState = VecGeneric;
+    type TupleStructState = VecGeneric;
+    type TupleVariantState = VecGeneric;
+
+    type MapState = MapGeneric;
+    type StructState = MapGeneric;
+    type StructVariantState = MapGeneric;
 
     fn serialize_bool(&mut self, v: bool) -> Result<(), error::Error> {
         if v {
@@ -446,10 +521,42 @@ impl ser::Serializer for VecGeneric {
         Ok(())
     }
 
+    fn serialize_isize(&mut self, value: isize) -> Result<(), error::Error> {
+        self.serialize_i64(value as i64)
+    }
+
+    fn serialize_i8(&mut self, value: i8) -> Result<(), error::Error> {
+        self.serialize_i64(value as i64)
+    }
+
+    fn serialize_i16(&mut self, value: i16) -> Result<(), error::Error> {
+        self.serialize_i64(value as i64)
+    }
+
+    fn serialize_i32(&mut self, value: i32) -> Result<(), error::Error> {
+        self.serialize_i64(value as i64)
+    }
+
     fn serialize_u64(&mut self, v: u64) -> Result<(), error::Error> {
         self.push(Generic::UInt(v));
 
         Ok(())
+    }
+
+    fn serialize_usize(&mut self, value: usize) -> Result<(), error::Error> {
+        self.serialize_u64(value as u64)
+    }
+
+    fn serialize_u8(&mut self, value: u8) -> Result<(), error::Error> {
+        self.serialize_u64(value as u64)
+    }
+
+    fn serialize_u16(&mut self, value: u16) -> Result<(), error::Error> {
+        self.serialize_u64(value as u64)
+    }
+
+    fn serialize_u32(&mut self, value: u32) -> Result<(), error::Error> {
+        self.serialize_u64(value as u64)
     }
 
     fn serialize_f32(&mut self, f: f32) -> Result<(), error::Error> {
@@ -470,10 +577,43 @@ impl ser::Serializer for VecGeneric {
         Ok(())
     }
 
+    fn serialize_char(&mut self, value: char) -> Result<(), error::Error> {
+        let string = String::from(vec![value]);
+        self.serialize_str(&*string)
+    }
+
+    fn serialize_bytes(&mut self, value: &[u8]) -> Result<(), error::Error> {
+        self.push(Generic::Bin(Vec::from(value).into_boxed_slice()));
+
+        Ok(())
+    }
+
     fn serialize_unit(&mut self) -> Result<(), error::Error> {
         self.push(Generic::Nil);
 
         Ok(())
+    }
+
+    fn serialize_unit_struct(&mut self, _: &'static str) -> Result<(), error::Error> {
+        self.serialize_unit()
+    }
+
+    fn serialize_unit_variant(&mut self, name: &'static str, _: usize, _: &'static str) -> Result<(), error::Error> {
+        self.serialize_unit_struct(name)
+    }
+
+    fn serialize_newtype_struct<T>(&mut self, name: &'static str, value: T) -> Result<(), error::Error>
+        where T: Serialize {
+        let mut state = try!(self.serialize_tuple_struct(name, 1));
+        try!(self.serialize_tuple_struct_elt(&mut state, value));
+        self.serialize_tuple_struct_end(state)
+    }
+
+    fn serialize_newtype_variant<T>(&mut self, name: &'static str, variant_index: usize, variant: &'static str, value: T) -> Result<(), error::Error>
+        where T: Serialize {
+        let mut state = try!(self.serialize_tuple_variant(name, variant_index, variant, 1));
+        try!(self.serialize_tuple_variant_elt(&mut state, value));
+        self.serialize_tuple_variant_end(state)
     }
 
     fn serialize_none(&mut self) -> Result<(), error::Error> {
@@ -484,32 +624,126 @@ impl ser::Serializer for VecGeneric {
         value.serialize(self)
     }
 
-    fn serialize_seq<V>(&mut self, mut visitor: V) -> Result<(), error::Error> where V: ser::SeqVisitor {
-        let mut buf = VecGeneric(vec![]);
+    fn serialize_seq(&mut self, len: Option<usize>) -> Result<VecGeneric, error::Error> {
+        if let Some(capacity) = len {
+            Ok(VecGeneric(Vec::with_capacity(capacity)))
+        } else {
+            Ok(VecGeneric(vec![]))
+        }
+    }
 
-        while try!(visitor.visit(&mut buf)).is_some() {}
+    fn serialize_seq_fixed_size(&mut self, size: usize) -> Result<VecGeneric, error::Error> {
+        self.serialize_seq(Some(size))
+    }
 
-        self.push(Generic::Array(buf.0.into_boxed_slice()));
+    fn serialize_seq_elt<T>(&mut self, state: &mut VecGeneric, value: T) -> Result<(), error::Error> where T: Serialize {
+        value.serialize(state)
+    }
+
+    fn serialize_seq_end(&mut self, state: VecGeneric) -> Result<(), error::Error> {
+        self.push(Generic::Array(state.0.into_boxed_slice()));
 
         Ok(())
     }
 
-    fn serialize_seq_elt<T>(&mut self, value: T) -> Result<(), error::Error> where T: Serialize {
-        value.serialize(self)
+    fn serialize_tuple(&mut self, len: usize) -> Result<VecGeneric, error::Error> {
+        self.serialize_seq_fixed_size(len)
     }
 
-    fn serialize_map<V>(&mut self, mut visitor: V) -> Result<(), error::Error> where V: ser::MapVisitor {
-        let mut buf = MapGeneric(vec![]);
+    fn serialize_tuple_elt<T>(&mut self, state: &mut VecGeneric, value: T) -> Result<(), error::Error>
+        where T: Serialize {
+        self.serialize_seq_elt(state, value)
+    }
 
-        while try!(visitor.visit(&mut buf)).is_some() {}
+    fn serialize_tuple_end(&mut self, state: VecGeneric) -> Result<(), error::Error> {
+        self.serialize_seq_end(state)
+    }
 
-        self.push(Generic::Map(buf.0.into_boxed_slice()));
+    fn serialize_tuple_struct(&mut self, _: &'static str, len: usize) -> Result<VecGeneric, error::Error> {
+        self.serialize_tuple(len)
+    }
+
+    fn serialize_tuple_struct_elt<T>(&mut self, state: &mut VecGeneric, value: T) -> Result<(), error::Error>
+        where T: Serialize {
+        self.serialize_tuple_elt(state, value)
+    }
+
+    fn serialize_tuple_struct_end(&mut self, state: VecGeneric) -> Result<(), error::Error> {
+        self.serialize_tuple_end(state)
+    }
+
+    fn serialize_tuple_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> Result<VecGeneric, error::Error> {
+        self.serialize_tuple_struct(name, len)
+    }
+
+    fn serialize_tuple_variant_elt<T>(&mut self, state: &mut VecGeneric, value: T) -> Result<(), error::Error>
+        where T: Serialize {
+        self.serialize_tuple_struct_elt(state, value)
+    }
+
+    fn serialize_tuple_variant_end(&mut self, state: VecGeneric) -> Result<(), error::Error> {
+        self.serialize_tuple_struct_end(state)
+    }
+
+    fn serialize_map(&mut self, len: Option<usize>) -> Result<MapGeneric, error::Error> {
+        if let Some(capacity) = len {
+            Ok(MapGeneric {
+                keys: VecGeneric(Vec::with_capacity(capacity)),
+                values: VecGeneric(Vec::with_capacity(capacity)),
+            })
+        } else {
+            Ok(MapGeneric {
+                keys: VecGeneric(vec![]),
+                values: VecGeneric(vec![]),
+            })
+        }
+    }
+
+    fn serialize_map_key<T>(&mut self, state: &mut MapGeneric, key: T) -> Result<(), error::Error> where T: Serialize {
+        key.serialize(&mut state.keys)
+    }
+
+    fn serialize_map_value<T>(&mut self, state: &mut MapGeneric, value: T) -> Result<(), error::Error> where T: Serialize {
+        value.serialize(&mut state.values)
+    }
+
+    fn serialize_map_end(&mut self, state: MapGeneric) -> Result<(), error::Error> {
+        if state.keys.len() != state.values.len() {
+            return Err(error::Error::custom("Number of keys and number of values did not match"));
+        }
+
+        self.push(Generic::Map(state.keys.0.into_iter().zip(state.values.0.into_iter())
+                               .collect::<Vec<(Generic, Generic)>>().into_boxed_slice()));
 
         Ok(())
     }
 
-    fn serialize_map_elt<K, V>(&mut self, _: K, _: V) -> Result<(), error::Error> where K: Serialize, V: Serialize {
-        Err(error::Error::simple(error::Reason::BadType))
+    fn serialize_struct(&mut self, _: &'static str, len: usize) -> Result<MapGeneric, error::Error> {
+        self.serialize_map(Some(len))
+    }
+
+    fn serialize_struct_elt<V>(&mut self, state: &mut MapGeneric, key: &'static str, value: V) -> Result<(), error::Error>
+        where V: Serialize {
+        try!(self.serialize_map_key(state, key));
+        self.serialize_map_value(state, value)
+    }
+
+    fn serialize_struct_end(&mut self, state: MapGeneric) -> Result<(), error::Error> {
+        self.serialize_map_end(state)
+    }
+
+    fn serialize_struct_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> Result<MapGeneric, error::Error> {
+        self.serialize_struct(name, len)
+    }
+
+    fn serialize_struct_variant_elt<V>(&mut self, state: &mut MapGeneric, key: &'static str, value: V) -> Result<(), error::Error>
+        where V: Serialize {
+        try!(self.serialize_map_key(state, key));
+        self.serialize_map_value(state, value)
+    }
+
+    fn serialize_struct_variant_end(&mut self, state: MapGeneric) -> Result<(), error::Error> {
+        self.serialize_struct_end(state)
     }
 }
 
