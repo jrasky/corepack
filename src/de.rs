@@ -6,7 +6,6 @@ use byteorder::{ByteOrder, BigEndian};
 
 use serde;
 
-use generic::{Generic, GenericVisitor};
 use defs::*;
 use error::*;
 
@@ -291,85 +290,6 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
     pub const fn new(input: F) -> Deserializer<F> {
         Deserializer {
             input: input
-        }
-    }
-
-    pub fn deserialize_generic(&mut self) -> Result<Generic, Error> {
-        let mut visitor = GenericVisitor;
-        let mut buf = [0];
-        try!(self.input(&mut buf));
-        match buf[0] {
-            EXT8 => {
-                let mut buf = [0];
-                try!(self.input(&mut buf));
-                let size = buf[0] as usize;
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0; size];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            EXT16 => {
-                let mut buf = [0; U16_BYTES];
-                try!(self.input(&mut buf));
-                let size = BigEndian::read_u16(&buf) as usize;
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0; size];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            EXT32 => {
-                let mut buf = [0; U32_BYTES];
-                try!(self.input(&mut buf));
-                let size = BigEndian::read_u32(&buf) as usize;
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0; size];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            FIXEXT1 => {
-                let mut buf = [0];
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            FIXEXT2 => {
-                let mut buf = [0];
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0; 2];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            FIXEXT4 => {
-                let mut buf = [0];
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0; 4];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            FIXEXT8 => {
-                let mut buf = [0];
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0; 8];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            FIXEXT16 => {
-                let mut buf = [0];
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
-                let mut buf = vec![0; 16];
-                try!(self.input(buf.as_mut_slice()));
-                visitor.visit_ext(ty, buf)
-            },
-            ty => self.parse_as(visitor, ty)
         }
     }
 

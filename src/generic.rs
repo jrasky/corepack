@@ -6,9 +6,8 @@ use alloc::boxed::Box;
 use collections::{String, Vec};
 
 use serde::{Serialize, Deserialize, Serializer, Deserializer, Error};
-use serde::de::value::ValueDeserializer;
 
-use serde::{ser, de, bytes};
+use serde::{ser, de};
 
 use error;
 
@@ -24,8 +23,7 @@ pub enum Generic {
     Bin(Box<[u8]>),
     Str(Box<str>),
     Array(Box<[Generic]>),
-    Map(Box<[(Generic, Generic)]>),
-    Ext(i8, Box<[u8]>)
+    Map(Box<[(Generic, Generic)]>)
 }
 
 struct SeqVisitor<I: Iterator<Item=Generic>> {
@@ -35,12 +33,6 @@ struct SeqVisitor<I: Iterator<Item=Generic>> {
 struct MapVisitor<I: Iterator<Item=(Generic, Generic)>> {
     iter: I,
     value: Option<Generic>
-}
-
-struct ExtVisitor<'a> {
-    ty: i8,
-    state: u8,
-    data: &'a [u8]
 }
 
 struct MapGeneric {
@@ -123,48 +115,6 @@ impl<I: Iterator<Item=(Generic, Generic)>> de::MapVisitor for MapVisitor<I> {
     }
 }
 
-impl<'a> de::MapVisitor for ExtVisitor<'a> {
-    type Error = error::Error;
-
-    fn visit_key<T>(&mut self) -> Result<Option<T>, error::Error> where T: Deserialize {
-        if self.state == 0 {
-            let mut de = ValueDeserializer::<error::Error>::into_deserializer("type");
-            Ok(Some(try!(T::deserialize(&mut de))))
-        } else if self.state == 1 {
-            let mut de = ValueDeserializer::<error::Error>::into_deserializer("data");
-            Ok(Some(try!(T::deserialize(&mut de))))
-        } else {
-            Ok(None)
-        }
-    }
-
-    fn visit_value<T>(&mut self) -> Result<T, error::Error> where T: Deserialize {
-        if self.state == 0 {
-            self.state += 1;
-            let mut de = ValueDeserializer::<error::Error>::into_deserializer(self.ty);
-            Ok(try!(T::deserialize(&mut de)))
-        } else if self.state == 1 {
-            self.state += 1;
-            let mut de = ValueDeserializer::<error::Error>::into_deserializer(bytes::Bytes::from(self.data));
-            Ok(try!(T::deserialize(&mut de)))
-        } else {
-            Err(de::Error::end_of_stream())
-        }
-    }
-
-    fn end(&mut self) -> Result<(), error::Error> {
-        if self.state > 1 {
-            Ok(())
-        } else {
-            Err(de::Error::invalid_length(2 - self.state as usize))
-        }
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (2 - self.state as usize, Some(2 - self.state as usize))
-    }
-}
-
 impl Deref for VecGeneric {
     type Target = Vec<Generic>;
 
@@ -176,12 +126,6 @@ impl Deref for VecGeneric {
 impl DerefMut for VecGeneric {
     fn deref_mut(&mut self) -> &mut Vec<Generic> {
         &mut self.0
-    }
-}
-
-impl GenericVisitor {
-    pub fn visit_ext<E>(&mut self, ty: i8, data: Vec<u8>) -> Result<Generic, E> where E: Error {
-        Ok(Generic::new_ext(ty, data.into_boxed_slice()))
     }
 }
 
@@ -293,12 +237,6 @@ impl Serialize for Generic {
                     try!(s.serialize_map_value(&mut state, value));
                 }
                 s.serialize_map_end(state)
-            },
-            &Ext(ty, ref data) => {
-                let mut state = try!(s.serialize_struct("Ext", 2));
-                try!(s.serialize_struct_elt(&mut state, "type", ty));
-                try!(s.serialize_struct_elt(&mut state, "data", data));
-                s.serialize_struct_end(state)
             }
         }
     }
@@ -332,11 +270,6 @@ impl de::Deserializer for Generic {
             &mut Map(ref m) => v.visit_map(MapVisitor {
                 iter: m.iter().cloned(),
                 value: None
-            }),
-            &mut Ext(ty, ref data) => v.visit_map(ExtVisitor {
-                ty: ty,
-                state: 0,
-                data: data
             })
         }
     }
@@ -764,18 +697,6 @@ impl Generic {
         }
     }
 
-    pub fn serialize_pack<F>(&self, s: &mut ::ser::Serializer<F>) -> Result<(), error::Error>
-        where F: FnMut(&[u8]) -> Result<(), error::Error> {
-        match self {
-            &Generic::Ext(ty, ref data) => s.serialize_ext(ty, &data),
-            value => Serialize::serialize(value, s)
-        }
-    }
-
-    pub fn new_ext(ty: i8, data: Box<[u8]>) -> Generic {
-        Generic::Ext(ty, data)
-    }
-
     pub fn is_nil(&self) -> bool {
         if let &Generic::Nil = self {
             true
@@ -861,30 +782,6 @@ impl Generic {
             true
         } else {
             false
-        }
-    }
-
-    pub fn is_ext(&self) -> bool {
-        if let &Generic::Ext(_, _) = self {
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn ext_type(&self) -> Option<i8> {
-        if let &Generic::Ext(ty, _) = self {
-            Some(ty)
-        } else {
-            None
-        }
-    }
-
-    pub fn ext_data(&self) -> Option<&[u8]> {
-        if let &Generic::Ext(_, ref data) = self {
-            Some(&data)
-        } else {
-            None
         }
     }
 }
