@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Jerome Rasky <jyrome.112@gmail.com>"]
 
 [dependencies]
-serde = { version = "0.8.4", default-features = false, features = ["collections"] }
+serde = { version = "0.8", default-features = false, features = ["collections"] }
+serde_macros = { version = "0.8" }
 byteorder = { version = "0.5.3", default-features = false }
 
 [features]

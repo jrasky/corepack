@@ -7,6 +7,8 @@
 #![feature(range_contains)]
 #![feature(const_fn)]
 #![feature(box_syntax)]
+#![feature(plugin, custom_derive)]
+#![plugin(serde_macros)]
 #![allow(overflowing_literals)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #[cfg(not(feature = "std"))]
