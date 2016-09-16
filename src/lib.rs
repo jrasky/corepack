@@ -7,11 +7,10 @@
 #![feature(range_contains)]
 #![feature(const_fn)]
 #![feature(box_syntax)]
-#![feature(plugin, custom_derive)]
-#![plugin(serde_macros)]
 #![allow(overflowing_literals)]
-#![cfg_attr(not(feature = "std"), no_std)]
-#[cfg(not(feature = "std"))]
+// always test with libstd turned on
+#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
+#[cfg(all(not(feature = "std"), not(test)))]
 extern crate core as std;
 extern crate serde;
 extern crate byteorder;
@@ -32,6 +31,9 @@ pub mod generic;
 pub mod error;
 pub mod ser;
 pub mod de;
+
+// include serde generated code
+include!(concat!(env!("OUT_DIR"), "/serde_types.rs"));
 
 pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     where I: Iterator<Item=u8>, V: serde::Deserialize {

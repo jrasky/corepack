@@ -5,8 +5,6 @@ use collections::{Vec, String};
 
 use byteorder::{ByteOrder, BigEndian};
 
-use serde::Serialize;
-
 use serde;
 
 use defs::*;
@@ -16,11 +14,6 @@ pub type Result = result::Result<(), Error>;
 
 pub struct Serializer<F: FnMut(&[u8]) -> Result> {
     output: F
-}
-
-pub struct MapState {
-    keys: Vec<::generic::Generic>,
-    values: Vec<::generic::Generic>,
 }
 
 impl<F: FnMut(&[u8]) -> Result> Serializer<F> {
@@ -38,14 +31,14 @@ impl<F: FnMut(&[u8]) -> Result> Serializer<F> {
 impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
     type Error = Error;
 
-    type SeqState = Vec<::generic::Generic>;
-    type TupleState = Vec<::generic::Generic>;
-    type TupleStructState = Vec<::generic::Generic>;
-    type TupleVariantState = Vec<::generic::Generic>;
+    type SeqState = Option<(usize, Vec<u8>)>;
+    type TupleState = Self::SeqState;
+    type TupleStructState = Self::SeqState;
+    type TupleVariantState = Self::SeqState;
 
-    type MapState = MapState;
-    type StructState = MapState;
-    type StructVariantState = MapState;
+    type MapState = Self::SeqState;
+    type StructState = Self::MapState;
+    type StructVariantState = Self::MapState;
 
     fn serialize_bool(&mut self, v: bool) -> Result {
         if v {
@@ -182,8 +175,8 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         self.serialize_unit()
     }
 
-    fn serialize_unit_variant(&mut self, name: &'static str, _: usize, _: &'static str) -> Result {
-        self.serialize_unit_struct(name)
+    fn serialize_unit_variant(&mut self, _: &'static str, _: usize, variant: &'static str) -> Result {
+        self.serialize_str(variant)
     }
 
     fn serialize_newtype_struct<T>(&mut self, name: &'static str, value: T) -> Result
@@ -209,170 +202,191 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         value.serialize(self)
     }
 
-    fn serialize_seq(&mut self, len: Option<usize>) -> result::Result<Vec<::generic::Generic>, Error> {
+    fn serialize_seq(&mut self, len: Option<usize>) -> result::Result<Self::SeqState, Error> {
         if let Some(size) = len {
-            Ok(Vec::with_capacity(size))
+            // output the size now
+
+            if size <= MAX_FIXARRAY {
+                try!(self.output(&[size as u8 | FIXARRAY_MASK]));
+            } else if size <= MAX_ARRAY16 {
+                let mut buf = [ARRAY16; U16_BYTES + 1];
+                BigEndian::write_u16(&mut buf[1..], size as u16);
+                try!(self.output(&buf));
+            } else if size <= MAX_ARRAY32 {
+                let mut buf = [ARRAY32; U32_BYTES + 1];
+                BigEndian::write_u32(&mut buf[1..], size as u32);
+                try!(self.output(&buf));
+            } else {
+                return Err(Error::simple(Reason::TooBig));
+            }
+
+            // No state needed
+            Ok(None)
         } else {
-            Ok(vec![])
+            Ok(Some((0, vec![])))
         }
     }
 
-    fn serialize_seq_fixed_size(&mut self, size: usize) -> result::Result<Vec<::generic::Generic>, Error> {
+    fn serialize_seq_fixed_size(&mut self, size: usize) -> result::Result<Self::SeqState, Error> {
         self.serialize_seq(Some(size))
     }
 
-    fn serialize_seq_elt<T>(&mut self, state: &mut Vec<::generic::Generic>, value: T) -> Result
+    fn serialize_seq_elt<T>(&mut self, state: &mut Self::SeqState, value: T) -> Result
         where T: serde::Serialize {
-        state.push(try!(::generic::Generic::from_value(value)));
+        if let &mut Some((ref mut size, ref mut buffer)) = state {
+            let mut target = Serializer::new(move |bytes| {
+                buffer.extend_from_slice(bytes);
+                Ok(())
+            });
 
-        Ok(())
-    }
+            *size += 1;
 
-    fn serialize_seq_end(&mut self, state: Vec<::generic::Generic>) -> Result {
-        let size = state.len();
-
-        if size <= MAX_FIXARRAY {
-            try!(self.output(&[size as u8 | FIXARRAY_MASK]));
-        } else if size <= MAX_ARRAY16 {
-            let mut buf = [ARRAY16; U16_BYTES + 1];
-            BigEndian::write_u16(&mut buf[1..], size as u16);
-            try!(self.output(&buf));
-        } else if size <= MAX_ARRAY32 {
-            let mut buf = [ARRAY32; U32_BYTES + 1];
-            BigEndian::write_u32(&mut buf[1..], size as u32);
-            try!(self.output(&buf));
+            value.serialize(&mut target)
         } else {
-            return Err(Error::simple(Reason::TooBig));
+            value.serialize(self)
         }
-
-        for value in state {
-            try!(value.serialize(self));
-        }
-
-        Ok(())
     }
 
-    fn serialize_tuple(&mut self, len: usize) -> result::Result<Vec<::generic::Generic>, Error> {
+    fn serialize_seq_end(&mut self, state: Self::SeqState) -> Result {
+        if let Some((size, buffer)) = state {
+            if size <= MAX_FIXARRAY {
+                try!(self.output(&[size as u8 | FIXARRAY_MASK]));
+            } else if size <= MAX_ARRAY16 {
+                let mut buf = [ARRAY16; U16_BYTES + 1];
+                BigEndian::write_u16(&mut buf[1..], size as u16);
+                try!(self.output(&buf));
+            } else if size <= MAX_ARRAY32 {
+                let mut buf = [ARRAY32; U32_BYTES + 1];
+                BigEndian::write_u32(&mut buf[1..], size as u32);
+                try!(self.output(&buf));
+            } else {
+                return Err(Error::simple(Reason::TooBig));
+            }
+
+            self.output(buffer.as_slice())
+        } else {
+            Ok(())
+        }
+    }
+
+    fn serialize_tuple(&mut self, len: usize) -> result::Result<Self::SeqState, Error> {
         self.serialize_seq_fixed_size(len)
     }
 
-    fn serialize_tuple_elt<T>(&mut self, state: &mut Vec<::generic::Generic>, value: T) -> Result
+    fn serialize_tuple_elt<T>(&mut self, state: &mut Self::SeqState, value: T) -> Result
         where T: serde::Serialize {
         self.serialize_seq_elt(state, value)
     }
 
-    fn serialize_tuple_end(&mut self, state: Vec<::generic::Generic>) -> Result {
+    fn serialize_tuple_end(&mut self, state: Self::SeqState) -> Result {
         self.serialize_seq_end(state)
     }
 
-    fn serialize_tuple_struct(&mut self, _: &'static str, len: usize) -> result::Result<Vec<::generic::Generic>, Error> {
+    fn serialize_tuple_struct(&mut self, _: &'static str, len: usize) -> result::Result<Self::SeqState, Error> {
         self.serialize_tuple(len)
     }
 
-    fn serialize_tuple_struct_elt<T>(&mut self, state: &mut Vec<::generic::Generic>, value: T) -> Result
+    fn serialize_tuple_struct_elt<T>(&mut self, state: &mut Self::SeqState, value: T) -> Result
         where T: serde::Serialize {
         self.serialize_tuple_elt(state, value)
     }
 
-    fn serialize_tuple_struct_end(&mut self, state: Vec<::generic::Generic>) -> Result {
+    fn serialize_tuple_struct_end(&mut self, state: Self::SeqState) -> Result {
         self.serialize_tuple_end(state)
     }
 
-    fn serialize_tuple_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> result::Result<Vec<::generic::Generic>, Error> {
+    fn serialize_tuple_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> result::Result<Self::SeqState, Error> {
         self.serialize_tuple_struct(name, len)
     }
 
-    fn serialize_tuple_variant_elt<T>(&mut self, state: &mut Vec<::generic::Generic>, value: T) -> Result
+    fn serialize_tuple_variant_elt<T>(&mut self, state: &mut Self::SeqState, value: T) -> Result
         where T: serde::Serialize {
         self.serialize_tuple_struct_elt(state, value)
     }
 
-    fn serialize_tuple_variant_end(&mut self, state: Vec<::generic::Generic>) -> Result {
+    fn serialize_tuple_variant_end(&mut self, state: Self::SeqState) -> Result {
         self.serialize_tuple_struct_end(state)
     }
 
-    fn serialize_map(&mut self, len: Option<usize>) -> result::Result<MapState, Error> {
+    fn serialize_map(&mut self, len: Option<usize>) -> result::Result<Self::MapState, Error> {
         if let Some(size) = len {
-            Ok(MapState {
-                keys: Vec::with_capacity(size),
-                values: Vec::with_capacity(size),
-            })
+            if size <= MAX_FIXMAP {
+                try!(self.output(&[size as u8 | FIXMAP_MASK]));
+            } else if size <= MAX_MAP16 {
+                let mut buf = [MAP16; U16_BYTES + 1];
+                BigEndian::write_u16(&mut buf[1..], size as u16);
+                try!(self.output(&buf));
+            } else if size <= MAX_MAP32 {
+                let mut buf = [MAP32; U32_BYTES + 1];
+                BigEndian::write_u32(&mut buf[1..], size as u32);
+                try!(self.output(&buf));
+            } else {
+                return Err(Error::simple(Reason::TooBig));
+            }
+
+            Ok(None)
         } else {
-            Ok(MapState {
-                keys: vec![],
-                values: vec![],
-            })
+            Ok(Some((0, vec![])))
         }
     }
 
-    fn serialize_map_key<T>(&mut self, state: &mut MapState, key: T) -> Result
+    fn serialize_map_key<T>(&mut self, state: &mut Self::MapState, key: T) -> Result
         where T: serde::Serialize {
-        state.keys.push(try!(::generic::Generic::from_value(key)));
-
-        Ok(())
+        self.serialize_seq_elt(state, key)
     }
 
-    fn serialize_map_value<T>(&mut self, state: &mut MapState, value: T) -> Result
+    fn serialize_map_value<T>(&mut self, state: &mut Self::MapState, value: T) -> Result
         where T: serde::Serialize {
-        state.values.push(try!(::generic::Generic::from_value(value)));
-
-        Ok(())
+        self.serialize_seq_elt(state, value)
     }
 
-    fn serialize_map_end(&mut self, state: MapState) -> Result {
-        if state.keys.len() != state.values.len() {
-            return Err(serde::Error::custom("Map did not have same number of values as keys"));
-        }
+    fn serialize_map_end(&mut self, state: Self::MapState) -> Result {
+        if let Some((size, buffer)) = state {
+            if size <= MAX_FIXMAP {
+                try!(self.output(&[size as u8 | FIXMAP_MASK]));
+            } else if size <= MAX_MAP16 {
+                let mut buf = [MAP16; U16_BYTES + 1];
+                BigEndian::write_u16(&mut buf[1..], size as u16);
+                try!(self.output(&buf));
+            } else if size <= MAX_MAP32 {
+                let mut buf = [MAP32; U32_BYTES + 1];
+                BigEndian::write_u32(&mut buf[1..], size as u32);
+                try!(self.output(&buf));
+            } else {
+                return Err(Error::simple(Reason::TooBig));
+            }
 
-        let size = state.keys.len();
-
-        if size <= MAX_FIXMAP {
-            try!(self.output(&[size as u8 | FIXMAP_MASK]));
-        } else if size <= MAX_MAP16 {
-            let mut buf = [MAP16; U16_BYTES + 1];
-            BigEndian::write_u16(&mut buf[1..], size as u16);
-            try!(self.output(&buf));
-        } else if size <= MAX_MAP32 {
-            let mut buf = [MAP32; U32_BYTES + 1];
-            BigEndian::write_u32(&mut buf[1..], size as u32);
-            try!(self.output(&buf));
+            self.output(buffer.as_slice())
         } else {
-            return Err(Error::simple(Reason::TooBig));
+            Ok(())
         }
-
-        for (key, value) in state.keys.into_iter().zip(state.values) {
-            try!(key.serialize(self));
-            try!(value.serialize(self));
-        }
-
-        Ok(())
     }
 
-    fn serialize_struct(&mut self, _: &'static str, len: usize) -> result::Result<MapState, Error> {
+    fn serialize_struct(&mut self, _: &'static str, len: usize) -> result::Result<Self::MapState, Error> {
         self.serialize_map(Some(len))
     }
 
-    fn serialize_struct_elt<V>(&mut self, state: &mut MapState, key: &'static str, value: V) -> Result
+    fn serialize_struct_elt<V>(&mut self, state: &mut Self::MapState, key: &'static str, value: V) -> Result
         where V: serde::Serialize {
         try!(self.serialize_map_key(state, key));
         self.serialize_map_value(state, value)
     }
 
-    fn serialize_struct_end(&mut self, state: MapState) -> Result {
+    fn serialize_struct_end(&mut self, state: Self::MapState) -> Result {
         self.serialize_map_end(state)
     }
 
-    fn serialize_struct_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> result::Result<MapState, Error> {
+    fn serialize_struct_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> result::Result<Self::MapState, Error> {
         self.serialize_struct(name, len)
     }
 
-    fn serialize_struct_variant_elt<V>(&mut self, state: &mut MapState, key: &'static str, value: V) -> Result
+    fn serialize_struct_variant_elt<V>(&mut self, state: &mut Self::MapState, key: &'static str, value: V) -> Result
         where V: serde::Serialize {
         try!(self.serialize_map_key(state, key));
         self.serialize_map_value(state, value)
     }
 
-    fn serialize_struct_variant_end(&mut self, state: MapState) -> Result {
+    fn serialize_struct_variant_end(&mut self, state: Self::MapState) -> Result {
         self.serialize_struct_end(state)
     }
 
@@ -405,7 +419,6 @@ mod test {
         let v: u8 = 23;
         assert_eq!(::to_bytes(v).unwrap(), &[0x17]);
     }
-
     #[test]
     fn negative_fixint_test() {
         let v: i8 = -5;

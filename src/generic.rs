@@ -908,13 +908,14 @@ impl Generic {
 mod test {
     use serde::Deserialize;
 
-    #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-    enum T {
-        A(usize),
-        B,
-        C(i8, i8),
-        D { a: isize },
-    }
+    use ::test::T;
+    // #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+    // enum T {
+    //     A(usize),
+    //     B,
+    //     C(i8, i8),
+    //     D { a: isize },
+    // }
 
     #[test]
     fn test_enum() {
