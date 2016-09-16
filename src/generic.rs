@@ -518,7 +518,7 @@ impl ser::Serializer for VecGeneric {
 
     type MapState = MapGeneric;
     type StructState = MapGeneric;
-    type StructVariantState = MapGeneric;
+    type StructVariantState = (&'static str, MapGeneric);
 
     fn serialize_bool(&mut self, v: bool) -> Result<(), error::Error> {
         if v {
@@ -768,19 +768,33 @@ impl ser::Serializer for VecGeneric {
         self.serialize_map_end(state)
     }
 
-    fn serialize_struct_variant(&mut self, name: &'static str, _: usize, variant: &'static str, len: usize) -> Result<MapGeneric, error::Error> {
-        try!(self.serialize_str(variant));
-        self.serialize_struct(name, len)
+    fn serialize_struct_variant(&mut self, _: &'static str, _: usize, variant: &'static str, len: usize) -> Result<Self::StructVariantState, error::Error> {
+        Ok((variant, MapGeneric {
+            keys: VecGeneric(Vec::with_capacity(len)),
+            values: VecGeneric(Vec::with_capacity(len))
+        }))
     }
 
-    fn serialize_struct_variant_elt<V>(&mut self, state: &mut MapGeneric, key: &'static str, value: V) -> Result<(), error::Error>
+    fn serialize_struct_variant_elt<V>(&mut self, state: &mut Self::StructVariantState, key: &'static str, value: V) -> Result<(), error::Error>
         where V: Serialize {
-        try!(self.serialize_map_key(state, key));
-        self.serialize_map_value(state, value)
+        try!(self.serialize_map_key(&mut state.1, key));
+        self.serialize_map_value(&mut state.1, value)
     }
 
-    fn serialize_struct_variant_end(&mut self, state: MapGeneric) -> Result<(), error::Error> {
-        self.serialize_struct_end(state)
+    fn serialize_struct_variant_end(&mut self, state: Self::StructVariantState) -> Result<(), error::Error> {
+        let (variant, map) = state;
+
+        if map.keys.len() != map.values.len() {
+            return Err(error::Error::custom("Number of keys and number of values did not match"));
+        }
+
+        self.push(Generic::Map(vec![(
+            Generic::Str(String::from(variant).into_boxed_str()),
+            Generic::Map(map.keys.0.into_iter().zip(map.values.0.into_iter())
+                         .collect::<Vec<(Generic, Generic)>>().into_boxed_slice())
+        )].into_boxed_slice()));
+
+        Ok(())
     }
 }
 
@@ -897,7 +911,9 @@ mod test {
     #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
     enum T {
         A(usize),
-        B
+        B,
+        C(i8, i8),
+        D { a: isize },
     }
 
     #[test]
@@ -914,6 +930,28 @@ mod test {
     #[test]
     fn test_enum_newtype() {
         let expected = T::A(42);
+
+        let mut x = ::Generic::from_value(&expected).expect("Failed to serialize enum");
+
+        let actual = T::deserialize(&mut x).expect("Failed to deserialize enum");
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_enum_tuple() {
+        let expected = T::C(-3, 22);
+
+        let mut x = ::Generic::from_value(&expected).expect("Failed to serialize enum");
+
+        let actual = T::deserialize(&mut x).expect("Failed to deserialize enum");
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_enum_struct() {
+        let expected = T::D { a: 9001 };
 
         let mut x = ::Generic::from_value(&expected).expect("Failed to serialize enum");
 
