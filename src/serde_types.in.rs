@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod test {
+mod test_types {
     #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
     pub enum T {
         A(usize),

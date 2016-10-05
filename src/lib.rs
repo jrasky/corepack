@@ -24,10 +24,8 @@ use std::ptr;
 
 pub use ser::Serializer;
 pub use de::Deserializer;
-pub use generic::Generic;
 
 mod defs;
-pub mod generic;
 pub mod error;
 pub mod ser;
 pub mod de;
@@ -86,4 +84,53 @@ pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
     }
 
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod test {
+    use serde::{Serialize, Deserialize};
+    use std::fmt::Debug;
+
+    use ::test_types::T;
+    // #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+    // enum T {
+    //     A(usize),
+    //     B,
+    //     C(i8, i8),
+    //     D { a: isize },
+    // }
+
+    fn test_through<T>(expected: T)
+        where T: Serialize + Deserialize + PartialEq + Debug {
+        let x = ::to_bytes(&expected).expect("Failed to serialize expected");
+
+        let actual = ::from_bytes(&x).expect("Failed to deserialize expected");
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_str() {
+        test_through(format!("Hello World!"))
+    }
+
+    #[test]
+    fn test_enum() {
+        test_through(T::B)
+    }
+
+    #[test]
+    fn test_enum_newtype() {
+        test_through(T::A(42))
+    }
+
+    #[test]
+    fn test_enum_tuple() {
+        test_through(T::C(-3, 22))
+    }
+
+    #[test]
+    fn test_enum_struct() {
+        test_through(T::D { a: 9001 })
+    }
 }

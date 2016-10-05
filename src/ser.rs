@@ -163,7 +163,9 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
     }
 
     fn serialize_char(&mut self, v: char) -> Result {
-        let string = String::from(vec![v]);
+        let mut string = String::new();
+        string.push(v);
+
         self.serialize_str(&*string)
     }
 
