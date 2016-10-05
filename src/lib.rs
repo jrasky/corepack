@@ -20,8 +20,6 @@ extern crate alloc;
 
 use collections::Vec;
 
-use std::ptr;
-
 pub use ser::Serializer;
 pub use de::Deserializer;
 
@@ -58,10 +56,8 @@ pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
         if position + buf.len() > bytes.len() {
             Err(error::Error::simple(error::Reason::EndOfStream))
         } else {
-            unsafe {
-                ptr::copy(bytes.as_ptr().offset(position as isize), buf.as_mut_ptr(), buf.len());
-            }
-
+            let len = buf.len();
+            buf.clone_from_slice(&bytes[position..position + len]);
             position += buf.len();
             Ok(())
         }

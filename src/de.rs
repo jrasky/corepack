@@ -1,8 +1,6 @@
 use collections::{String, Vec};
 
-use std::mem;
-
-use byteorder::{ByteOrder, BigEndian};
+use byteorder::{ByteOrder, BigEndian, LittleEndian};
 
 use serde::de::value::ValueDeserializer;
 
@@ -464,7 +462,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
                 visitor.visit_u8(v)
             }
             v if NEG_FIXINT.contains(v) => {
-                visitor.visit_i8(unsafe {mem::transmute(v)})
+                visitor.visit_i8(LittleEndian::read_i16(&[v, 0]) as i8)
             }
             v if FIXMAP.contains(v) => {
                 let size = (v & !FIXMAP_MASK) as usize * 2;
@@ -510,7 +508,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
                 try!(self.input(&mut buf));
                 let size = buf[0] as usize;
                 try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0; size];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
@@ -523,8 +521,8 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
                 let mut buf = [0; U16_BYTES];
                 try!(self.input(&mut buf));
                 let size = BigEndian::read_u16(&buf) as usize;
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                try!(self.input(&mut buf[..1]));
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0; size];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
@@ -537,8 +535,8 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
                 let mut buf = [0; U32_BYTES];
                 try!(self.input(&mut buf));
                 let size = BigEndian::read_u32(&buf) as usize;
-                try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                try!(self.input(&mut buf[..1]));
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0; size];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
@@ -570,7 +568,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
             INT8 => {
                 let mut buf = [0];
                 try!(self.input(&mut buf));
-                visitor.visit_i8(unsafe {mem::transmute(buf[0])})
+                visitor.visit_i8(LittleEndian::read_i16(&[buf[0], 0]) as i8)
             }
             INT16 => {
                 let mut buf = [0; U16_BYTES];
@@ -590,7 +588,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
             FIXEXT1 => {
                 let mut buf = [0];
                 try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
@@ -602,7 +600,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
             FIXEXT2 => {
                 let mut buf = [0];
                 try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0; 2];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
@@ -614,7 +612,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
             FIXEXT4 => {
                 let mut buf = [0];
                 try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0; 4];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
@@ -626,7 +624,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
             FIXEXT8 => {
                 let mut buf = [0];
                 try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0; 8];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
@@ -638,7 +636,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
             FIXEXT16 => {
                 let mut buf = [0];
                 try!(self.input(&mut buf));
-                let ty: i8 = unsafe {mem::transmute(buf[0])};
+                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
                 let mut buf = vec![0; 16];
                 try!(self.input(buf.as_mut_slice()));
                 visitor.visit_map(ExtVisitor {
