@@ -34,7 +34,7 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
     type SeqState = Option<(usize, Vec<u8>)>;
     type TupleState = Self::SeqState;
     type TupleStructState = Self::SeqState;
-    type TupleVariantState = Self::SeqState;
+    type TupleVariantState = Self::TupleState;
 
     type MapState = Self::SeqState;
     type StructState = Self::MapState;
@@ -177,8 +177,8 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         self.serialize_unit()
     }
 
-    fn serialize_unit_variant(&mut self, _: &'static str, _: usize, variant: &'static str) -> Result {
-        self.serialize_str(variant)
+    fn serialize_unit_variant(&mut self, _: &'static str, index: usize, _: &'static str) -> Result {
+        self.serialize_usize(index)
     }
 
     fn serialize_newtype_struct<T>(&mut self, name: &'static str, value: T) -> Result
@@ -297,17 +297,21 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         self.serialize_tuple_end(state)
     }
 
-    fn serialize_tuple_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> result::Result<Self::SeqState, Error> {
-        self.serialize_tuple_struct(name, len)
+    fn serialize_tuple_variant(&mut self, _: &'static str, index: usize, _: &'static str, len: usize) -> result::Result<Self::TupleVariantState, Error> {
+        let mut state = try!(self.serialize_tuple(len + 1));
+        // serialize the variant index as an extra element at the front
+        try!(self.serialize_tuple_elt(&mut state, index));
+
+        Ok(state)
     }
 
     fn serialize_tuple_variant_elt<T>(&mut self, state: &mut Self::SeqState, value: T) -> Result
         where T: serde::Serialize {
-        self.serialize_tuple_struct_elt(state, value)
+        self.serialize_tuple_elt(state, value)
     }
 
     fn serialize_tuple_variant_end(&mut self, state: Self::SeqState) -> Result {
-        self.serialize_tuple_struct_end(state)
+        self.serialize_tuple_end(state)
     }
 
     fn serialize_map(&mut self, len: Option<usize>) -> result::Result<Self::MapState, Error> {
@@ -378,18 +382,35 @@ impl<F: FnMut(&[u8]) -> Result> serde::Serializer for Serializer<F> {
         self.serialize_map_end(state)
     }
 
-    fn serialize_struct_variant(&mut self, name: &'static str, _: usize, _: &'static str, len: usize) -> result::Result<Self::MapState, Error> {
+    fn serialize_struct_variant(&mut self, name: &'static str, index: usize, _: &'static str, len: usize) -> result::Result<Self::MapState, Error> {
+        // encode a struct variant as a tuple of the variant index plus the struct itself
+        let mut state = try!(self.serialize_tuple(2));
+
+        // state in this case should statically be None, so only check in debug builds
+        debug_assert!(state.is_none(), "Tuple state was not None");
+
+        // that means we can just throw recreate it later
+
+        try!(self.serialize_tuple_elt(&mut state, index));
+
+        // messagepack uses pascal-style arrays for objects, so we can just keep encoding things
+        // and get the same result as if we called serialize_elt. This is a bit of a hack, though.
+
         self.serialize_struct(name, len)
     }
 
     fn serialize_struct_variant_elt<V>(&mut self, state: &mut Self::MapState, key: &'static str, value: V) -> Result
         where V: serde::Serialize {
-        try!(self.serialize_map_key(state, key));
-        self.serialize_map_value(state, value)
+        self.serialize_struct_elt(state, key, value)
     }
 
     fn serialize_struct_variant_end(&mut self, state: Self::MapState) -> Result {
-        self.serialize_struct_end(state)
+        try!(self.serialize_struct_end(state));
+
+        // end the tuple here as well, re-creating the state
+        // we asserted earlier that the state in this case should be None, since this
+        // is a fixed-sized sequence
+        self.serialize_tuple_end(None)
     }
 
     fn serialize_bytes(&mut self, value: &[u8]) -> Result {

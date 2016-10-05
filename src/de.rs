@@ -4,6 +4,8 @@ use std::mem;
 
 use byteorder::{ByteOrder, BigEndian};
 
+use serde::de::value::ValueDeserializer;
+
 use serde;
 
 use defs::*;
@@ -24,12 +26,167 @@ struct ExtVisitor {
     data: Vec<u8>
 }
 
+struct VariantVisitor<'a, F: 'a + FnMut(&mut [u8]) -> Result<(), Error>> {
+    de: &'a mut Deserializer<F>,
+    count: usize
+}
+
 impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> SeqVisitor<'a, F> {
     fn new(de: &'a mut Deserializer<F>, count: usize) -> SeqVisitor<'a, F> {
         SeqVisitor {
             de: de,
             count: count
         }
+    }
+}
+impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> serde::de::SeqVisitor for VariantVisitor<'a, F> {
+    type Error = Error;
+
+    fn visit<T>(&mut self) -> Result<Option<T>, Error>
+        where T: serde::Deserialize {
+        if self.count == 0 {
+            return Ok(None);
+        }
+
+        self.count -= 1;
+
+        Ok(Some(try!(T::deserialize(self.de))))
+    }
+
+    fn end(&mut self) -> Result<(), Error> {
+        if self.count != 0 {
+            Err(Error::simple(Reason::ExtraItems))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.count, Some(self.count))
+    }
+}
+
+impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> serde::de::VariantVisitor for VariantVisitor<'a, F> {
+    type Error = Error;
+
+    fn visit_variant<V>(&mut self) -> Result<V, Error> where V: serde::Deserialize {
+        // not much of a choice but to reach into de here
+
+        let mut buf = [0];
+        try!(self.de.input(&mut buf));
+
+        // switch here because unit variants are just encoded as a usize
+        match buf[0] {
+            // for usizes, we have to do some hand-waiving because we can't peek
+            // hopefully closures aren't too slow
+            //
+            // also flatten variant indexes to a usize because bluh
+            //
+            // BUG: discriminant might not fit into usize
+            v if POS_FIXINT.contains(v) => {
+                V::deserialize(&mut (buf[0] as usize).into_deserializer())
+            }
+            UINT8 => {
+                let mut buf = [0];
+                try!(self.de.input(&mut buf));
+                V::deserialize(&mut (buf[0] as usize).into_deserializer())
+            }
+            UINT16 => {
+                let mut buf = [0; U16_BYTES];
+                try!(self.de.input(&mut buf));
+                V::deserialize(&mut (BigEndian::read_u16(&buf) as usize).into_deserializer())
+            }
+            UINT32 => {
+                let mut buf = [0; U32_BYTES];
+                try!(self.de.input(&mut buf));
+                V::deserialize(&mut (BigEndian::read_u32(&buf) as usize).into_deserializer())
+            }
+            UINT64 => {
+                let mut buf = [0; U64_BYTES];
+                try!(self.de.input(&mut buf));
+                V::deserialize(&mut (BigEndian::read_u64(&buf) as usize).into_deserializer())
+            }
+            v if FIXARRAY.contains(v) => {
+                // minus one because we grab the first element here
+                self.count = (v & !FIXARRAY_MASK) as usize;
+
+                // check that we didn't get a zero size back
+                if self.count == 0 {
+                    return Err(serde::Error::invalid_length(0))
+                }
+
+                self.count -= 1;
+
+                let variant: usize = try!(serde::Deserialize::deserialize(self.de));
+                V::deserialize(&mut variant.into_deserializer())
+            }
+            ARRAY16 => {
+                let mut buf = [0; U16_BYTES];
+                try!(self.de.input(&mut buf));
+                self.count = BigEndian::read_u16(&buf) as usize;
+
+                if self.count == 0 {
+                    return Err(serde::Error::invalid_length(0))
+                }
+
+                self.count -= 1;
+
+                let variant: usize = try!(serde::Deserialize::deserialize(self.de));
+                V::deserialize(&mut variant.into_deserializer())
+            }
+            ARRAY32 => {
+                let mut buf = [0; U32_BYTES];
+                try!(self.de.input(&mut buf));
+                self.count = BigEndian::read_u32(&buf) as usize;
+
+                if self.count == 0 {
+                    return Err(serde::Error::invalid_length(0))
+                }
+
+                self.count -= 1;
+
+                let variant: usize = try!(serde::Deserialize::deserialize(self.de));
+                V::deserialize(&mut variant.into_deserializer())
+            }
+            _ => {
+                Err(serde::Error::custom("Enum variant was not a number or in a tuple"))
+            }
+        }
+    }
+
+    fn visit_tuple<V>(&mut self, _: usize, mut visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        // tuple variants have an extra item added to them
+        visitor.visit_seq(self)
+    }
+
+    fn visit_struct<V>(&mut self, _: &'static [&'static str], visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor {
+        // struct variants are encoded as a tuple with the discriminant and then the encoded struct
+        // so the encoded struct should just be the next element
+        if self.count == 0 {
+            return Err(serde::Error::custom("No more elements in this tuple"));
+        }
+
+        self.count -= 1;
+
+        // universal function call syntax because I'm lazy
+        serde::Deserializer::deserialize(self.de, visitor)
+    }
+
+    fn visit_newtype<T>(&mut self) -> Result<T, Error> where T: serde::Deserialize {
+        // newtypes are encoded as two-element tuples
+        if self.count == 0 {
+            return Err(serde::Error::custom("No more elements in this tuple"));
+        }
+
+        self.count -= 1;
+
+        T::deserialize(self.de)
+    }
+
+    fn visit_unit(&mut self) -> Result<(), Error> {
+        Ok(())
     }
 }
 
@@ -275,9 +432,12 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> serde::Deserializer for Deseriali
         self.deserialize_seq_fixed_size(len, visitor)
     }
 
-    fn deserialize_enum<V>(&mut self, _: &'static str, _: &'static [&'static str], _: V) -> Result<V::Value, Error>
+    fn deserialize_enum<V>(&mut self, _: &'static str, _: &'static [&'static str], mut visitor: V) -> Result<V::Value, Error>
         where V: serde::de::EnumVisitor {
-        Err(serde::Error::invalid_type(serde::de::Type::Enum))
+        visitor.visit(VariantVisitor {
+            de: self,
+            count: 0
+        })
     }
 
     fn deserialize_ignored_any<V>(&mut self, visitor: V) -> Result<V::Value, Error>
