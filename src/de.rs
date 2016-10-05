@@ -76,7 +76,6 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> serde::de::VariantVisitor for
         // switch here because unit variants are just encoded as a usize
         match buf[0] {
             // for usizes, we have to do some hand-waiving because we can't peek
-            // hopefully closures aren't too slow
             //
             // also flatten variant indexes to a usize because bluh
             //
