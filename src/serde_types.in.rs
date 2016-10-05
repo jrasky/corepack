@@ -5,6 +5,6 @@ mod test_types {
         A(usize),
         B,
         C(i8, i8),
-        D { a: isize },
+        D { a: isize, b: String },
     }
 }

@@ -97,7 +97,7 @@ mod test {
     //     A(usize),
     //     B,
     //     C(i8, i8),
-    //     D { a: isize },
+    //     D { a: isize, b: String },
     // }
 
     fn test_through<T>(expected: T)
@@ -131,6 +131,6 @@ mod test {
 
     #[test]
     fn test_enum_struct() {
-        test_through(T::D { a: 9001 })
+        test_through(T::D { a: 9001, b: "Hello world!".into() })
     }
 }
