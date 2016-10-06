@@ -1,3 +1,4 @@
 target
 Cargo.lock
 /.tramp_history
+/src/.tramp_history
