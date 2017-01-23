@@ -6,7 +6,7 @@ build = "build.rs"
 
 [dependencies]
 serde = { version = "0.8", default-features = false, features = ["collections"] }
-byteorder = { version = "0.5", default-features = false }
+byteorder = { version = "1.0", default-features = false }
 
 [build-dependencies]
 serde_codegen = { version = "0.8" }
