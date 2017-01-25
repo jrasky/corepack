@@ -9,6 +9,8 @@ use serde;
 use defs::*;
 use error::*;
 
+/// The corepack Deserializer struct. Contains a closure that should copy the
+/// next bytes availabel into the given byte buffer.
 pub struct Deserializer<F: FnMut(&mut [u8]) -> Result<(), Error>> {
     input: F
 }
@@ -444,6 +446,7 @@ impl<F: FnMut(&mut [u8]) -> Result<(), Error>> serde::Deserializer for Deseriali
 }
 
 impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
+    /// Create a new Deserializer given an input function.
     pub const fn new(input: F) -> Deserializer<F> {
         Deserializer {
             input: input

@@ -3,6 +3,12 @@ name = "corepack"
 version = "0.1.1"
 authors = ["Jerome Rasky <jyrome.112@gmail.com>"]
 build = "build.rs"
+description = "A no_std support for messagepack in serde"
+documentation = "https://docs.rs/corepack"
+repository = "https://github.com/jrasky/corepack.git"
+readme = "README.md"
+keywords = ["messagepack", "binary", "encoding", "serialize"]
+license = "MPL-2.0"
 
 [dependencies]
 serde = { version = "0.8", default-features = false, features = ["collections"] }

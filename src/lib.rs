@@ -23,14 +23,16 @@ use collections::Vec;
 pub use ser::Serializer;
 pub use de::Deserializer;
 
-mod defs;
 pub mod error;
-pub mod ser;
-pub mod de;
+
+mod defs;
+mod ser;
+mod de;
 
 // include serde generated code
 include!(concat!(env!("OUT_DIR"), "/serde_types.rs"));
 
+/// Parse V out of a byte stream.
 pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     where I: Iterator<Item=u8>, V: serde::Deserialize {
     let mut de = Deserializer::new(|buf: &mut [u8]| {
@@ -48,6 +50,7 @@ pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     V::deserialize(&mut de)
 }
 
+/// Parse V out of a slice of bytes.
 pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
     where V: serde::Deserialize {
     let mut position: usize = 0;
@@ -66,6 +69,7 @@ pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
     V::deserialize(&mut de)
 }
 
+/// Serialize V into a byte buffer.
 pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
     where V: serde::Serialize {
     let mut bytes = vec![];

@@ -11,11 +11,14 @@ use error::*;
 
 pub type Result = result::Result<(), Error>;
 
+/// The corepack Serializer. Contains a closure that receives byte buffers as
+/// the output is created.
 pub struct Serializer<F: FnMut(&[u8]) -> Result> {
     output: F
 }
 
 impl<F: FnMut(&[u8]) -> Result> Serializer<F> {
+    /// Create a new Serializer given an output function.
     pub const fn new(output: F) -> Serializer<F> {
         Serializer {
             output: output
