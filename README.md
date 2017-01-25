@@ -3,6 +3,8 @@ A no_std support for messagepack in serde
 
 [Documentation](https://docs.rs/corepack)
 
+[MPL 2.0 License](LICENSE)
+
 To use:
 ```toml
 corepack = "0.1"
