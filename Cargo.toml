@@ -2,14 +2,11 @@
 name = "corepack"
 version = "0.1.1"
 authors = ["Jerome Rasky <jyrome.112@gmail.com>"]
-build = "build.rs"
 
 [dependencies]
-serde = { version = "0.8", default-features = false, features = ["collections"] }
+serde = { version = "0.9", default-features = false, features = ["collections"] }
+serde_derive = { version = "0.9", features = ["unstable"] }
 byteorder = { version = "1.0", default-features = false }
-
-[build-dependencies]
-serde_codegen = { version = "0.8" }
 
 [features]
 default = []

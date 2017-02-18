@@ -15,6 +15,8 @@ extern crate core as std;
 extern crate serde;
 extern crate byteorder;
 #[macro_use]
+extern crate serde_derive;
+#[macro_use]
 extern crate collections;
 extern crate alloc;
 
@@ -27,9 +29,6 @@ mod defs;
 pub mod error;
 pub mod ser;
 pub mod de;
-
-// include serde generated code
-include!(concat!(env!("OUT_DIR"), "/serde_types.rs"));
 
 pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     where I: Iterator<Item=u8>, V: serde::Deserialize {
@@ -87,14 +86,13 @@ mod test {
     use serde::{Serialize, Deserialize};
     use std::fmt::Debug;
 
-    use ::test_types::T;
-    // #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-    // enum T {
-    //     A(usize),
-    //     B,
-    //     C(i8, i8),
-    //     D { a: isize, b: String },
-    // }
+    #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+    enum T {
+        A(usize),
+        B,
+        C(i8, i8),
+        D { a: isize, b: String },
+    }
 
     fn test_through<T>(expected: T)
         where T: Serialize + Deserialize + PartialEq + Debug {

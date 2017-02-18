@@ -121,10 +121,6 @@ impl ::serde::ser::Error for Error {
     fn custom<T: Into<String>>(msg: T) -> Error {
         Error::new(Reason::Other, msg.into())
     }
-
-    fn invalid_value(msg: &str) -> Self {
-        Error::new(Reason::BadValue, msg.into())
-    }
 }
 
 impl ::serde::de::Error for Error {
@@ -132,16 +128,12 @@ impl ::serde::de::Error for Error {
         ::serde::ser::Error::custom(msg)
     }
 
-    fn end_of_stream() -> Error {
-        Error::simple(Reason::EndOfStream)
+    fn invalid_type(unexp: ::serde::de::Unexpected, exp: &::serde::de::Expected) -> Error {
+        Error::new(Reason::BadType, format!("Unexpected: {}, Expected: {}", unexp, exp))
     }
 
-    fn invalid_type(ty: ::serde::de::Type) -> Error {
-        Error::new(Reason::BadType, format!("Expected {:?}", ty))
-    }
-
-    fn invalid_value(msg: &str) -> Error {
-        Error::new(Reason::BadValue, msg.into())
+    fn invalid_value(unexp: ::serde::de::Unexpected, exp: &::serde::de::Expected) -> Error {
+        Error::new(Reason::BadValue, format!("Unexpected: {}, Expected: {}", unexp, exp))
     }
 
     fn invalid_length(len: usize) -> Error {
