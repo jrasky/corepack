@@ -22,10 +22,6 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
     pub const fn new(output: F) -> Serializer<F> {
         Serializer { output: output }
     }
-
-    fn output(&mut self, buf: &[u8]) -> Result<()> {
-        self.output.call_mut((buf,))
-    }
 }
 
 impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
