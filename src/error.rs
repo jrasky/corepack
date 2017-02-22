@@ -30,7 +30,7 @@ pub struct Error {
     #[cfg(not(feature = "std"))]
     cause: Option<Box<::serde::error::Error>>,
     #[cfg(feature = "std")]
-    cause: Option<Box<::std::error::Error>>
+    cause: Option<Box<::std::error::Error>>,
 }
 
 impl Display for Error {
@@ -48,7 +48,7 @@ impl Display for Error {
             Reason::NoField => "Missing field",
             Reason::DupField => "Duplicate field",
             Reason::UTF8Error => "UTF-8 encoding error",
-            Reason::Other => "Other error"
+            Reason::Other => "Other error",
         };
 
         if !self.detail.is_empty() {
@@ -61,20 +61,26 @@ impl Display for Error {
 
 impl Error {
     #[cfg(not(feature = "std"))]
-    pub const fn chain(reason: Reason, detail: String, cause: Option<Box<::serde::error::Error>>) -> Error {
+    pub const fn chain(reason: Reason,
+                       detail: String,
+                       cause: Option<Box<::serde::error::Error>>)
+                       -> Error {
         Error {
             reason: reason,
             detail: detail,
-            cause: cause
+            cause: cause,
         }
     }
 
     #[cfg(feature = "std")]
-    pub const fn chain(reason: Reason, detail: String, cause: Option<Box<::std::error::Error>>) -> Error {
+    pub const fn chain(reason: Reason,
+                       detail: String,
+                       cause: Option<Box<::std::error::Error>>)
+                       -> Error {
         Error {
             reason: reason,
             detail: detail,
-            cause: cause
+            cause: cause,
         }
     }
 
@@ -118,41 +124,13 @@ impl ::std::error::Error for Error {
 }
 
 impl ::serde::ser::Error for Error {
-    fn custom<T: Into<String>>(msg: T) -> Error {
-        Error::new(Reason::Other, msg.into())
+    fn custom<T: Display>(msg: T) -> Error {
+        Error::new(Reason::Other, format!("{}", msg))
     }
 }
 
 impl ::serde::de::Error for Error {
-    fn custom<T: Into<String>>(msg: T) -> Error {
+    fn custom<T: Display>(msg: T) -> Error {
         ::serde::ser::Error::custom(msg)
-    }
-
-    fn invalid_type(unexp: ::serde::de::Unexpected, exp: &::serde::de::Expected) -> Error {
-        Error::new(Reason::BadType, format!("Unexpected: {}, Expected: {}", unexp, exp))
-    }
-
-    fn invalid_value(unexp: ::serde::de::Unexpected, exp: &::serde::de::Expected) -> Error {
-        Error::new(Reason::BadValue, format!("Unexpected: {}, Expected: {}", unexp, exp))
-    }
-
-    fn invalid_length(len: usize) -> Error {
-        Error::new(Reason::BadLength, format!("{}", len))
-    }
-
-    fn unknown_variant(field: &str) -> Error {
-        Error::new(Reason::BadVariant, field.into())
-    }
-
-    fn unknown_field(field: &str) -> Error {
-        Error::new(Reason::BadField, field.into())
-    }
-
-    fn missing_field(field: &'static str) -> Error {
-        Error::new(Reason::NoField, field.into())
-    }
-
-    fn duplicate_field(field: &'static str) -> Error {
-        Error::new(Reason::DupField, field.into())
     }
 }

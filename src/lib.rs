@@ -31,7 +31,9 @@ pub mod ser;
 pub mod de;
 
 pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
-    where I: Iterator<Item=u8>, V: serde::Deserialize {
+    where I: Iterator<Item = u8>,
+          V: serde::Deserialize
+{
     let mut de = Deserializer::new(|buf: &mut [u8]| {
         for i in 0..buf.len() {
             if let Some(byte) = iter.next() {
@@ -48,25 +50,25 @@ pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
 }
 
 pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
-    where V: serde::Deserialize {
+    where V: serde::Deserialize
+{
     let mut position: usize = 0;
 
-    let mut de = Deserializer::new(|buf: &mut [u8]| {
-        if position + buf.len() > bytes.len() {
-            Err(error::Error::simple(error::Reason::EndOfStream))
-        } else {
-            let len = buf.len();
-            buf.clone_from_slice(&bytes[position..position + len]);
-            position += buf.len();
-            Ok(())
-        }
+    let mut de = Deserializer::new(|buf: &mut [u8]| if position + buf.len() > bytes.len() {
+        Err(error::Error::simple(error::Reason::EndOfStream))
+    } else {
+        let len = buf.len();
+        buf.clone_from_slice(&bytes[position..position + len]);
+        position += buf.len();
+        Ok(())
     });
 
     V::deserialize(&mut de)
 }
 
 pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
-    where V: serde::Serialize {
+    where V: serde::Serialize
+{
     let mut bytes = vec![];
 
     {
@@ -75,7 +77,7 @@ pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
             Ok(())
         });
 
-        try!(value.serialize(&mut ser));
+        try!(value.serialize(ser));
     }
 
     Ok(bytes)
@@ -95,7 +97,8 @@ mod test {
     }
 
     fn test_through<T>(expected: T)
-        where T: Serialize + Deserialize + PartialEq + Debug {
+        where T: Serialize + Deserialize + PartialEq + Debug
+    {
         let x = ::to_bytes(&expected).expect("Failed to serialize expected");
 
         let actual = ::from_bytes(&x).expect("Failed to deserialize expected");
@@ -125,6 +128,9 @@ mod test {
 
     #[test]
     fn test_enum_struct() {
-        test_through(T::D { a: 9001, b: "Hello world!".into() })
+        test_through(T::D {
+            a: 9001,
+            b: "Hello world!".into(),
+        })
     }
 }
