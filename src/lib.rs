@@ -26,6 +26,8 @@ pub use ser::Serializer;
 pub use de::Deserializer;
 
 mod defs;
+mod map_variant_serializer;
+mod seq_serializer;
 pub mod error;
 pub mod ser;
 pub mod de;

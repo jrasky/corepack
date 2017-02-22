@@ -1,5 +1,11 @@
 use std::ops::RangeInclusive;
 
+use std::result;
+
+use error::Error;
+
+pub type Result<T> = result::Result<T, Error>;
+
 // fixint limits
 pub const FIXINT_MAX: u8 = 0b01111111;
 pub const FIXINT_MIN: i8 = 0b11100000;
