@@ -1,13 +1,15 @@
+//! Common definitions that are useful in many places, as well as constants.
+//
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
-
 use std::ops::RangeInclusive;
 
 use std::result;
 
 use error::Error;
 
+/// Define our own result type because we always use the same error type
 pub type Result<T> = result::Result<T, Error>;
 
 // fixint limits
