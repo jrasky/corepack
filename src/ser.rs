@@ -156,6 +156,14 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
     type SerializeStruct = Self::SerializeMap;
     type SerializeStructVariant = MapVariantSerializer<'a, F>;
 
+    fn serialize_seq(self, len: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
+        Ok(SeqSerializer::new(&mut self.output))
+    }
+
+    fn serialize_map(self, len: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
+        Ok(MapSerializer::new(&mut self.output))
+    }
+
     fn serialize_bool(self, v: bool) -> Result<()> {
         Serializer::serialize_bool(self, v)
     }
@@ -258,10 +266,6 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
         value.serialize(self)
     }
 
-    fn serialize_seq(self, len: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
-        Ok(SeqSerializer::new(&mut self.output))
-    }
-
     fn serialize_seq_fixed_size(self, size: usize) -> result::Result<Self::SerializeSeq, Error> {
         self.serialize_seq(Some(size))
     }
@@ -288,10 +292,6 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
         seq.serialize_element(&index)?;
 
         Ok(seq)
-    }
-
-    fn serialize_map(self, len: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
-        Ok(MapSerializer::new(&mut self.output))
     }
 
     fn serialize_struct(self,

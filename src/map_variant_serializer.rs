@@ -72,6 +72,12 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapVariantSerializer<'a, F> {
     }
 
     fn output_map(&mut self) -> Result<()> {
+        if self.size % 1 != 0 {
+            return Err(Error::simple(Reason::BadLength));
+        }
+
+        self.size /= 2;
+
         if self.size <= MAX_FIXMAP {
             try!((self.output)(&[self.size as u8 | FIXMAP_MASK]));
         } else if self.size <= MAX_MAP16 {
