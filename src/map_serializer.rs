@@ -51,7 +51,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
 
     fn finish(mut self) -> Result<()> {
         if let Some(size) = self.size {
-            self.check_item_count_matches_size(size * 2);
+            self.check_item_count_matches_size(size * 2)?;
             Ok(())
         } else {
             let count = self.get_item_count()?;
