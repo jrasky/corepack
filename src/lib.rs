@@ -44,6 +44,7 @@ pub mod error;
 mod ser;
 mod de;
 
+/// Parse V out of a stream of bytes.
 pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     where I: Iterator<Item = u8>,
           V: serde::Deserialize

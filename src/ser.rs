@@ -15,11 +15,13 @@ use error::*;
 use seq_serializer::*;
 use map_serializer::*;
 
+/// The corepack Serializer. Contains a closure that receives byte buffers as the output is created.
 pub struct Serializer<F: FnMut(&[u8]) -> Result<()>> {
     output: F,
 }
 
 impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
+    /// Create a new Deserializer given an input function.
     pub const fn new(output: F) -> Serializer<F> {
         Serializer { output: output }
     }

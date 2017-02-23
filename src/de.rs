@@ -14,11 +14,13 @@ use variant_visitor::*;
 use defs::*;
 use error::*;
 
+/// The corepack Deserializer struct. Contains a closure that should copy the next bytes availabel into the given byte buffer.
 pub struct Deserializer<F: FnMut(&mut [u8]) -> Result<()>> {
     input: F,
 }
 
 impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
+    /// Create a new Deserializer given an input function.
     pub const fn new(input: F) -> Deserializer<F> {
         Deserializer { input: input }
     }
