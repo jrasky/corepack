@@ -163,12 +163,20 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
     type SerializeStruct = Self::SerializeMap;
     type SerializeStructVariant = Self::SerializeMap;
 
-    fn serialize_seq(self, _: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
-        Ok(SeqSerializer::new(&mut self.output))
+    fn serialize_seq(self, size: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
+        let mut seq = SeqSerializer::new(&mut self.output);
+
+        seq.hint_size(size)?;
+
+        Ok(seq)
     }
 
-    fn serialize_map(self, _: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
-        Ok(MapSerializer::new(&mut self.output))
+    fn serialize_map(self, size: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
+        let mut map = MapSerializer::new(&mut self.output);
+
+        map.hint_size(size)?;
+
+        Ok(map)
     }
 
     fn serialize_bool(self, v: bool) -> Result<()> {
