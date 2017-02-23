@@ -1,7 +1,7 @@
 use collections::Vec;
 
 use serde::ser::{Serialize, SerializeSeq, SerializeMap, SerializeTupleVariant, SerializeStruct,
-                 SerializeTuple, SerializeTupleStruct, SerializeStructVariant};
+                 SerializeTuple, SerializeTupleStruct};
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
 
@@ -9,20 +9,17 @@ use ser::Serializer;
 
 use defs::*;
 use error::*;
-use seq_serializer::*;
 
-pub struct MapVariantSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<()>> {
+pub struct MapSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<()>> {
     size: usize,
-    variant: usize,
     buffer: Vec<u8>,
     output: &'a mut F,
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapVariantSerializer<'a, F> {
-    pub fn new(variant: usize, output: &'a mut F) -> MapVariantSerializer<'a, F> {
-        MapVariantSerializer {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
+    pub fn new(output: &'a mut F) -> MapSerializer<'a, F> {
+        MapSerializer {
             size: 0,
-            variant: variant,
             buffer: vec![],
             output: output,
         }
@@ -42,36 +39,6 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapVariantSerializer<'a, F> {
     }
 
     fn finish(mut self) -> Result<()> {
-        // get the serialized variant
-        let variant_buffer = self.serialize_variant()?;
-
-        // output a tuple of size two
-        (self.output)(&[2u8 | FIXARRAY_MASK])?;
-
-        // output our variant index
-        (self.output)(&*variant_buffer)?;
-
-        // now output the map as the second element
-        self.output_map()
-    }
-
-    fn serialize_variant(&self) -> Result<Vec<u8>> {
-        // create a temporary buffer for the tuple and serialize the variant index
-        let mut buffer = vec![];
-
-        {
-            let mut target = Serializer::new(|bytes: &[u8]| {
-                buffer.extend_from_slice(bytes);
-                Ok(())
-            });
-
-            self.variant.serialize(&mut target)?;
-        }
-
-        Ok(buffer)
-    }
-
-    fn output_map(&mut self) -> Result<()> {
         if self.size <= MAX_FIXMAP {
             try!((self.output)(&[self.size as u8 | FIXMAP_MASK]));
         } else if self.size <= MAX_MAP16 {
@@ -90,19 +57,38 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapVariantSerializer<'a, F> {
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStructVariant
-    for MapVariantSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeMap for MapSerializer<'a, F> {
+    type Ok = ();
+    type Error = Error;
+
+    fn serialize_key<T>(&mut self, key: &T) -> Result<()>
+        where T: ?Sized + Serialize
+    {
+        MapSerializer::serialize_element(self, key)
+    }
+
+    fn serialize_value<T>(&mut self, value: &T) -> Result<()>
+        where T: ?Sized + Serialize
+    {
+        MapSerializer::serialize_element(self, value)
+    }
+
+    fn end(mut self) -> Result<()> {
+        MapSerializer::finish(self)
+    }
+}
+
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStruct for MapSerializer<'a, F> {
     type Ok = ();
     type Error = Error;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
         where T: ?Sized + Serialize
     {
-        MapVariantSerializer::serialize_element(self, key)?;
-        MapVariantSerializer::serialize_element(self, value)
+        MapSerializer::serialize_entry(self, key, value)
     }
 
     fn end(self) -> Result<()> {
-        MapVariantSerializer::finish(self)
+        MapSerializer::finish(self)
     }
 }

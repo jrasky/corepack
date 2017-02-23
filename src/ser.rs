@@ -12,6 +12,7 @@ use serde;
 use defs::*;
 use error::*;
 use seq_serializer::*;
+use map_serializer::*;
 use map_variant_serializer::*;
 
 pub struct Serializer<F: FnMut(&[u8]) -> Result<()>> {
@@ -22,30 +23,8 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
     pub const fn new(output: F) -> Serializer<F> {
         Serializer { output: output }
     }
-}
 
-impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
-    type Ok = ();
-    type Error = Error;
-
-    type SerializeSeq = SeqSerializer<F>;
-    type SerializeTuple = Self::SerializeSeq;
-    type SerializeTupleStruct = Self::SerializeTuple;
-    type SerializeTupleVariant = Self::SerializeTuple;
-
-    type SerializeMap = SeqSerializer<F>;
-    type SerializeStruct = Self::SerializeMap;
-    type SerializeStructVariant = MapVariantSerializer<F>;
-
-    fn serialize_bool(mut self, v: bool) -> Result<()> {
-        if v {
-            (self.output)(&[TRUE])
-        } else {
-            (self.output)(&[FALSE])
-        }
-    }
-
-    fn serialize_i64(mut self, value: i64) -> Result<()> {
+    fn serialize_signed(&mut self, value: i64) -> Result<()> {
         if value >= FIXINT_MIN as i64 && value <= FIXINT_MAX as i64 {
             let mut buf = [0; U16_BYTES];
             LittleEndian::write_i16(&mut buf, value as i16);
@@ -81,19 +60,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
         }
     }
 
-    fn serialize_i8(self, value: i8) -> Result<()> {
-        self.serialize_i64(value as i64)
-    }
-
-    fn serialize_i16(self, value: i16) -> Result<()> {
-        self.serialize_i64(value as i64)
-    }
-
-    fn serialize_i32(self, value: i32) -> Result<()> {
-        self.serialize_i64(value as i64)
-    }
-
-    fn serialize_u64(mut self, value: u64) -> Result<()> {
+    fn serialize_unsigned(&mut self, value: u64) -> Result<()> {
         if value <= FIXINT_MAX as u64 {
             (self.output)(&[value as u8])
         } else if value <= u8::max_value() as u64 {
@@ -113,31 +80,45 @@ impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
         }
     }
 
-    fn serialize_u8(self, value: u8) -> Result<()> {
-        self.serialize_u64(value as u64)
+    fn serialize_bool(&mut self, value: bool) -> Result<()> {
+        if value {
+            (self.output)(&[TRUE])
+        } else {
+            (self.output)(&[FALSE])
+        }
     }
 
-    fn serialize_u16(self, value: u16) -> Result<()> {
-        self.serialize_u64(value as u64)
-    }
-
-    fn serialize_u32(self, value: u32) -> Result<()> {
-        self.serialize_u64(value as u64)
-    }
-
-    fn serialize_f32(mut self, value: f32) -> Result<()> {
+    fn serialize_f32(&mut self, value: f32) -> Result<()> {
         let mut buf = [FLOAT32; U32_BYTES + 1];
         BigEndian::write_f32(&mut buf[1..], value);
         (self.output)(&buf)
     }
 
-    fn serialize_f64(mut self, value: f64) -> Result<()> {
+    fn serialize_f64(&mut self, value: f64) -> Result<()> {
         let mut buf = [FLOAT64; U64_BYTES + 1];
         BigEndian::write_f64(&mut buf[1..], value);
         (self.output)(&buf)
     }
 
-    fn serialize_str(mut self, value: &str) -> Result<()> {
+    fn serialize_bytes(&mut self, value: &[u8]) -> Result<()> {
+        if value.len() <= MAX_BIN8 {
+            try!((self.output)(&[BIN8, value.len() as u8]));
+        } else if value.len() <= MAX_BIN16 {
+            let mut buf = [BIN16; U16_BYTES + 1];
+            BigEndian::write_u16(&mut buf[1..], value.len() as u16);
+            try!((self.output)(&buf));
+        } else if value.len() <= MAX_BIN32 {
+            let mut buf = [BIN32; U32_BYTES + 1];
+            BigEndian::write_u32(&mut buf[1..], value.len() as u32);
+            try!((self.output)(&buf));
+        } else {
+            return Err(Error::simple(Reason::TooBig));
+        }
+
+        (self.output)(value)
+    }
+
+    fn serialize_str(&mut self, value: &str) -> Result<()> {
         if value.len() <= MAX_FIXSTR {
             try!((self.output)(&[value.len() as u8 | FIXSTR_MASK]));
         } else if value.len() <= MAX_STR8 {
@@ -157,6 +138,80 @@ impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
         (self.output)(value.as_bytes())
     }
 
+    fn serialize_unit(&mut self) -> Result<()> {
+        (self.output)(&[NIL])
+    }
+}
+
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Serializer<F> {
+    type Ok = ();
+    type Error = Error;
+
+    type SerializeSeq = SeqSerializer<'a, F>;
+    type SerializeTuple = Self::SerializeSeq;
+    type SerializeTupleStruct = Self::SerializeTuple;
+    type SerializeTupleVariant = Self::SerializeTuple;
+
+    type SerializeMap = MapSerializer<'a, F>;
+    type SerializeStruct = Self::SerializeMap;
+    type SerializeStructVariant = MapVariantSerializer<'a, F>;
+
+    fn serialize_bool(self, v: bool) -> Result<()> {
+        Serializer::serialize_bool(self, v)
+    }
+
+    fn serialize_i64(self, value: i64) -> Result<()> {
+        Serializer::serialize_signed(self, value)
+    }
+
+    fn serialize_u64(self, value: u64) -> Result<()> {
+        Serializer::serialize_unsigned(self, value)
+    }
+
+    fn serialize_f32(self, value: f32) -> Result<()> {
+        Serializer::serialize_f32(self, value)
+    }
+
+    fn serialize_f64(self, value: f64) -> Result<()> {
+        Serializer::serialize_f64(self, value)
+    }
+
+    fn serialize_bytes(self, value: &[u8]) -> Result<()> {
+        Serializer::serialize_bytes(self, value)
+    }
+
+    fn serialize_str(self, value: &str) -> Result<()> {
+        Serializer::serialize_str(self, value)
+    }
+
+    fn serialize_unit(self) -> Result<()> {
+        Serializer::serialize_unit(self)
+    }
+
+    fn serialize_i8(self, value: i8) -> Result<()> {
+        Serializer::serialize_signed(self, value as i64)
+    }
+
+    fn serialize_i16(self, value: i16) -> Result<()> {
+        Serializer::serialize_signed(self, value as i64)
+    }
+
+    fn serialize_i32(self, value: i32) -> Result<()> {
+        Serializer::serialize_signed(self, value as i64)
+    }
+
+    fn serialize_u8(self, value: u8) -> Result<()> {
+        Serializer::serialize_unsigned(self, value as u64)
+    }
+
+    fn serialize_u16(self, value: u16) -> Result<()> {
+        Serializer::serialize_unsigned(self, value as u64)
+    }
+
+    fn serialize_u32(self, value: u32) -> Result<()> {
+        Serializer::serialize_unsigned(self, value as u64)
+    }
+
     fn serialize_char(self, v: char) -> Result<()> {
         let mut string = String::new();
         string.push(v);
@@ -164,16 +219,12 @@ impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
         self.serialize_str(&*string)
     }
 
-    fn serialize_unit(mut self) -> Result<()> {
-        (self.output)(&[NIL])
-    }
-
     fn serialize_unit_struct(self, _: &'static str) -> Result<()> {
         self.serialize_unit()
     }
 
     fn serialize_unit_variant(self, _: &'static str, index: usize, _: &'static str) -> Result<()> {
-        self.serialize_u64(index as u64)
+        Serializer::serialize_unsigned(self, index as u64)
     }
 
     fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<()>
@@ -208,7 +259,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
     }
 
     fn serialize_seq(self, len: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
-        Ok(SeqSerializer::new(self.output))
+        Ok(SeqSerializer::new(&mut self.output))
     }
 
     fn serialize_seq_fixed_size(self, size: usize) -> result::Result<Self::SerializeSeq, Error> {
@@ -240,7 +291,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
     }
 
     fn serialize_map(self, len: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
-        Ok(SeqSerializer::new(self.output))
+        Ok(MapSerializer::new(&mut self.output))
     }
 
     fn serialize_struct(self,
@@ -256,25 +307,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> serde::Serializer for Serializer<F> {
                                 _: &'static str,
                                 _: usize)
                                 -> result::Result<Self::SerializeStructVariant, Error> {
-        Ok(MapVariantSerializer::new(index, self.output))
-    }
-
-    fn serialize_bytes(mut self, value: &[u8]) -> Result<()> {
-        if value.len() <= MAX_BIN8 {
-            try!((self.output)(&[BIN8, value.len() as u8]));
-        } else if value.len() <= MAX_BIN16 {
-            let mut buf = [BIN16; U16_BYTES + 1];
-            BigEndian::write_u16(&mut buf[1..], value.len() as u16);
-            try!((self.output)(&buf));
-        } else if value.len() <= MAX_BIN32 {
-            let mut buf = [BIN32; U32_BYTES + 1];
-            BigEndian::write_u32(&mut buf[1..], value.len() as u32);
-            try!((self.output)(&buf));
-        } else {
-            return Err(Error::simple(Reason::TooBig));
-        }
-
-        (self.output)(value)
+        Ok(MapVariantSerializer::new(index, &mut self.output))
     }
 }
 

@@ -28,6 +28,7 @@ pub use de::Deserializer;
 mod defs;
 mod map_variant_serializer;
 mod seq_serializer;
+mod map_serializer;
 pub mod error;
 pub mod ser;
 pub mod de;
@@ -79,7 +80,7 @@ pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
             Ok(())
         });
 
-        try!(value.serialize(ser));
+        try!(value.serialize(&mut ser));
     }
 
     Ok(bytes)
