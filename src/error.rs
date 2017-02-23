@@ -1,3 +1,9 @@
+//! Error types for corepack.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License,
+// v. 2.0. If a copy of the MPL was not distributed with this file, You can
+// obtain one at https://mozilla.org/MPL/2.0/.
+
 use std::fmt::Display;
 
 use collections::String;
@@ -6,23 +12,47 @@ use alloc::boxed::Box;
 
 use std::fmt;
 
+/// Reasons that parsing or encoding might fail in corepack.
 #[derive(Debug, Clone, Copy)]
 pub enum Reason {
+    /// Container or sequence was too big to serialize.
     TooBig,
+
+    /// Extra items remained after deserializing a sequence.
     ExtraItems,
-    Unsized,
+
+    /// Invalid value encountered.
     BadValue,
+
+    /// Reached end of a stream.
     EndOfStream,
+
+    /// Invalid type encountered.
     BadType,
+
+    /// Invalid length encountered.
     BadLength,
+
+    /// Encountered an unknown enum variant.
     BadVariant,
+
+    /// Unknown field included in struct.
     BadField,
+
+    /// Missing field from struct.
     NoField,
+
+    /// Duplicate field found in struct.
     DupField,
+
+    /// Error decoding UTF8 string.
     UTF8Error,
+
+    /// Some other error that does not fit into the above.
     Other,
 }
 
+/// Error struct for corepack errors.
 #[derive(Debug)]
 pub struct Error {
     reason: Reason,
@@ -38,7 +68,6 @@ impl Display for Error {
         let name = match self.reason {
             Reason::TooBig => "Overflowing value",
             Reason::ExtraItems => "More items that expected",
-            Reason::Unsized => "Unsized value",
             Reason::BadValue => "Invalid value",
             Reason::EndOfStream => "End of stream",
             Reason::BadType => "Invalid type",
@@ -60,6 +89,7 @@ impl Display for Error {
 }
 
 impl Error {
+    /// Wrap an error in a new error, for context.
     #[cfg(not(feature = "std"))]
     pub const fn chain(reason: Reason,
                        detail: String,
@@ -72,6 +102,7 @@ impl Error {
         }
     }
 
+    /// Wrap an error in a new error, for context.
     #[cfg(feature = "std")]
     pub const fn chain(reason: Reason,
                        detail: String,
@@ -84,10 +115,13 @@ impl Error {
         }
     }
 
+    /// Create a new error without chaining a cause.
     pub const fn new(reason: Reason, detail: String) -> Error {
         Error::chain(reason, detail, None)
     }
 
+
+    /// Create a new error from just a reason.
     pub fn simple(reason: Reason) -> Error {
         Error::new(reason, String::new())
     }

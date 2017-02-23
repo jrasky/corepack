@@ -1,3 +1,9 @@
+//! corepack is a no_std support for messagepack in serde.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License,
+// v. 2.0. If a copy of the MPL was not distributed with this file, You can
+// obtain one at https://mozilla.org/MPL/2.0/.
+
 #![feature(inclusive_range)]
 #![feature(inclusive_range_syntax)]
 #![feature(fn_traits)]
@@ -34,8 +40,10 @@ mod ext_visitor;
 mod seq_visitor;
 
 pub mod error;
-pub mod ser;
-pub mod de;
+
+mod defs;
+mod ser;
+mod de;
 
 pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     where I: Iterator<Item = u8>,
@@ -56,6 +64,7 @@ pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     V::deserialize(&mut de)
 }
 
+/// Parse V out of a slice of bytes.
 pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
     where V: serde::Deserialize
 {
@@ -73,6 +82,7 @@ pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
     V::deserialize(&mut de)
 }
 
+/// Serialize V into a byte buffer.
 pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
     where V: serde::Serialize
 {
