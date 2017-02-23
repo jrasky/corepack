@@ -147,7 +147,8 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
 
     fn serialize_variant(&mut self, variant_index: usize) -> Result<()> {
         // Serialize variants as two-tuples with the variant index and its contents.
-        // Because messagepack is purely right-associative, we don't have to track the variant once we get it going.
+        // Because messagepack is purely right-associative, we don't have to track
+        // the variant once we get it going.
 
         // start a two element array
         (self.output)(&[2u8 | FIXARRAY_MASK])?;

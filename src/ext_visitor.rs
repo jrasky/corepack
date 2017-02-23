@@ -23,7 +23,7 @@ impl ExtVisitor {
         ExtVisitor {
             state: 0,
             ty: ty,
-            data: data
+            data: data,
         }
     }
 }
@@ -54,8 +54,8 @@ impl MapVisitor for ExtVisitor {
             Ok(try!(seed.deserialize(de)))
         } else if self.state == 1 {
             self.state += 1;
-            let de = ValueDeserializer::<Error>::into_deserializer(
-                Bytes::from(self.data.as_slice()));
+            let de = ValueDeserializer::<Error>::into_deserializer(Bytes::from(self.data
+                .as_slice()));
             Ok(try!(seed.deserialize(de)))
         } else {
             Err(Error::simple(Reason::EndOfStream))

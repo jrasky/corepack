@@ -16,7 +16,8 @@ use variant_visitor::*;
 use defs::*;
 use error::*;
 
-/// The corepack Deserializer struct. Contains a closure that should copy the next bytes availabel into the given byte buffer.
+/// The corepack Deserializer struct. Contains a closure that should copy
+/// the next bytes availabel into the given byte buffer.
 pub struct Deserializer<F: FnMut(&mut [u8]) -> Result<()>> {
     input: F,
 }

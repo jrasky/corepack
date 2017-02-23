@@ -35,9 +35,11 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumVisitor for VariantVisitor<'a, F
         where V: DeserializeSeed
     {
         // get the variant index with a one-item tuple
-        let variant_index_container: (usize, /* enum-type */) = Deserialize::deserialize(&mut *self.de)?;
+        let variant_index_container: (usize, /* enum-type */) =
+            Deserialize::deserialize(&mut *self.de)?;
 
-        // the other value in this tuple would be the actual value of the enum, but we don't know what that is
+        // the other value in this tuple would be the actual value of the enum,
+        // but we don't know what that is
         let (variant_index /* enum-value */,) = variant_index_container;
 
         // translate that to the name of the variant
