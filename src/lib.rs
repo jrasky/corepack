@@ -41,7 +41,6 @@ mod seq_visitor;
 
 pub mod error;
 
-mod defs;
 mod ser;
 mod de;
 
