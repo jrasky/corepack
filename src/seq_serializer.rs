@@ -1,9 +1,9 @@
 use collections::Vec;
 
-use serde::ser::{Serialize, SerializeSeq, SerializeMap, SerializeTupleVariant, SerializeStruct,
-                 SerializeTuple, SerializeTupleStruct};
+use serde::ser::{Serialize, SerializeSeq, SerializeTupleVariant, SerializeTuple,
+                 SerializeTupleStruct};
 
-use byteorder::{ByteOrder, BigEndian, LittleEndian};
+use byteorder::{ByteOrder, BigEndian};
 
 use ser::Serializer;
 

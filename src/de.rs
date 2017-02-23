@@ -1,8 +1,6 @@
-use collections::{String, Vec};
+use collections::String;
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
-
-use serde::de::value::ValueDeserializer;
 
 use serde;
 
@@ -26,7 +24,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
         self.input.call_mut((buf,))
     }
 
-    fn parse_as<V>(&mut self, mut visitor: V, ty: u8) -> Result<V::Value>
+    fn parse_as<V>(&mut self, visitor: V, ty: u8) -> Result<V::Value>
         where V: serde::de::Visitor
     {
         match ty {
@@ -417,7 +415,7 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
     fn deserialize_enum<V>(self,
                            _: &'static str,
                            variants: &'static [&'static str],
-                           mut visitor: V)
+                           visitor: V)
                            -> Result<V::Value>
         where V: serde::de::Visitor
     {

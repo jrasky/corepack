@@ -1,11 +1,8 @@
 use std::result;
 
-use collections::{Vec, String};
+use collections::String;
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
-
-use serde::ser::{SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeMap,
-                 SerializeTupleStruct};
 
 use serde;
 
@@ -13,7 +10,6 @@ use defs::*;
 use error::*;
 use seq_serializer::*;
 use map_serializer::*;
-use map_variant_serializer::*;
 
 pub struct Serializer<F: FnMut(&[u8]) -> Result<()>> {
     output: F,
@@ -167,11 +163,11 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
     type SerializeStruct = Self::SerializeMap;
     type SerializeStructVariant = Self::SerializeMap;
 
-    fn serialize_seq(self, len: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
+    fn serialize_seq(self, _: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
         Ok(SeqSerializer::new(&mut self.output))
     }
 
-    fn serialize_map(self, len: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
+    fn serialize_map(self, _: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
         Ok(MapSerializer::new(&mut self.output))
     }
 
@@ -247,7 +243,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
         self.serialize_unit()
     }
 
-    fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<()>
+    fn serialize_newtype_struct<T>(self, _: &'static str, value: &T) -> Result<()>
         where T: ?Sized + serde::Serialize
     {
         // serialize newtypes directly

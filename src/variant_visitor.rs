@@ -2,7 +2,6 @@ use serde::de::{DeserializeSeed, EnumVisitor, Visitor, Deserialize};
 use serde::de::value::ValueDeserializer;
 
 use de::Deserializer;
-use seq_visitor::SeqVisitor;
 
 use error::*;
 use defs::*;
@@ -34,7 +33,7 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumVisitor for VariantVisitor<'a, F
         let variant_index_container: (usize, /* enum-type */) = Deserialize::deserialize(&mut *self.de)?;
 
         // the other value in this tuple would be the actual value of the enum, but we don't know what that is
-        let (variant_index, /* enum-value */) = variant_index_container;
+        let (variant_index /* enum-value */,) = variant_index_container;
 
         // translate that to the name of the variant
         let value = seed.deserialize(self.variants[variant_index].into_deserializer())?;

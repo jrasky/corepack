@@ -1,9 +1,8 @@
 use collections::Vec;
 
-use serde::ser::{Serialize, SerializeSeq, SerializeMap, SerializeTupleVariant, SerializeStruct,
-                 SerializeTuple, SerializeTupleStruct, SerializeStructVariant};
+use serde::ser::{Serialize, SerializeMap, SerializeStruct, SerializeStructVariant};
 
-use byteorder::{ByteOrder, BigEndian, LittleEndian};
+use byteorder::{ByteOrder, BigEndian};
 
 use ser::Serializer;
 
@@ -79,7 +78,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeMap for MapSerializer<'a, 
         MapSerializer::serialize_element(self, value)
     }
 
-    fn end(mut self) -> Result<()> {
+    fn end(self) -> Result<()> {
         MapSerializer::finish(self)
     }
 }
@@ -99,8 +98,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStruct for MapSerializer<'
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStructVariant
-    for MapSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStructVariant for MapSerializer<'a, F> {
     type Ok = ();
     type Error = Error;
 

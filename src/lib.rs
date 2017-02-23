@@ -14,6 +14,7 @@
 extern crate core as std;
 extern crate serde;
 extern crate byteorder;
+#[cfg(test)]
 #[macro_use]
 extern crate serde_derive;
 #[macro_use]
@@ -26,7 +27,6 @@ pub use ser::Serializer;
 pub use de::Deserializer;
 
 mod defs;
-mod map_variant_serializer;
 mod seq_serializer;
 mod map_serializer;
 mod variant_visitor;

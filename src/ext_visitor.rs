@@ -30,10 +30,10 @@ impl MapVisitor for ExtVisitor {
         where T: DeserializeSeed
     {
         if self.state == 0 {
-            let mut de = ValueDeserializer::<Error>::into_deserializer("type");
+            let de = ValueDeserializer::<Error>::into_deserializer("type");
             Ok(Some(try!(seed.deserialize(de))))
         } else if self.state == 1 {
-            let mut de = ValueDeserializer::<Error>::into_deserializer("data");
+            let de = ValueDeserializer::<Error>::into_deserializer("data");
             Ok(Some(try!(seed.deserialize(de))))
         } else {
             Ok(None)
@@ -45,11 +45,11 @@ impl MapVisitor for ExtVisitor {
     {
         if self.state == 0 {
             self.state += 1;
-            let mut de = ValueDeserializer::<Error>::into_deserializer(self.ty);
+            let de = ValueDeserializer::<Error>::into_deserializer(self.ty);
             Ok(try!(seed.deserialize(de)))
         } else if self.state == 1 {
             self.state += 1;
-            let mut de = ValueDeserializer::<Error>::into_deserializer(
+            let de = ValueDeserializer::<Error>::into_deserializer(
                 Bytes::from(self.data.as_slice()));
             Ok(try!(seed.deserialize(de)))
         } else {
