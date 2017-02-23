@@ -105,9 +105,9 @@ mod test {
     fn test_through<T>(expected: T)
         where T: Serialize + Deserialize + PartialEq + Debug
     {
-        let x = ::to_bytes(&expected).expect("Failed to serialize expected");
+        let x = ::to_bytes(&expected).expect("Failed to serialize");
 
-        let actual = ::from_bytes(&x).expect("Failed to deserialize expected");
+        let actual = ::from_bytes(&x).expect("Failed to deserialize");
 
         assert_eq!(expected, actual);
     }

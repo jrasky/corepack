@@ -1,100 +1,70 @@
-use serde::de::{SeqVisitor, DeserializeSeed, EnumVisitor, Visitor};
+use serde::de::{DeserializeSeed, EnumVisitor, Visitor, Deserialize};
+use serde::de::value::ValueDeserializer;
 
 use de::Deserializer;
+use seq_visitor::SeqVisitor;
 
 use error::*;
 use defs::*;
 
 pub struct VariantVisitor<'a, F: 'a + FnMut(&mut [u8]) -> Result<()>> {
     de: &'a mut Deserializer<F>,
-    count: usize,
+    variants: &'static [&'static str],
 }
 
 impl<'a, F: FnMut(&mut [u8]) -> Result<()>> VariantVisitor<'a, F> {
-    pub fn new(de: &'a mut Deserializer<F>, count: usize) -> VariantVisitor<'a, F> {
+    pub fn new(de: &'a mut Deserializer<F>,
+               variants: &'static [&'static str])
+               -> VariantVisitor<'a, F> {
         VariantVisitor {
             de: de,
-            count: count
+            variants: variants,
         }
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> SeqVisitor for VariantVisitor<'a, F> {
-    type Error = Error;
-
-    fn visit_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-        where T: DeserializeSeed
-    {
-        if self.count == 0 {
-            return Ok(None);
-        }
-
-        self.count -= 1;
-
-        let value = seed.deserialize(&mut *self.de)?;
-
-        Ok(Some(value))
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (self.count, Some(self.count))
-    }
-}
-
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumVisitor
-    for VariantVisitor<'a, F> {
+impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumVisitor for VariantVisitor<'a, F> {
     type Error = Error;
     type Variant = VariantVisitor<'a, F>;
 
-    fn visit_variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant)>
+    fn visit_variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant)>
         where V: DeserializeSeed
     {
-        let value = seed.deserialize(&mut *self.de)?;
+        // get the variant index with a one-item tuple
+        let variant_index_container: (usize, /* enum-type */) = Deserialize::deserialize(&mut *self.de)?;
+
+        // the other value in this tuple would be the actual value of the enum, but we don't know what that is
+        let (variant_index, /* enum-value */) = variant_index_container;
+
+        // translate that to the name of the variant
+        let value = seed.deserialize(self.variants[variant_index].into_deserializer())?;
 
         Ok((value, self))
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> ::serde::de::VariantVisitor
-    for
-    VariantVisitor<'a, F> {
+impl<'a, F: FnMut(&mut [u8]) -> Result<()>> ::serde::de::VariantVisitor for VariantVisitor<'a, F> {
     type Error = Error;
 
-    fn visit_tuple<V>(self, _: usize, mut visitor: V) -> Result<V::Value>
+    fn visit_tuple<V>(self, _: usize, visitor: V) -> Result<V::Value>
         where V: Visitor
     {
-        // tuple variants have an extra item added to them
-        visitor.visit_seq(self)
-    }
-
-    fn visit_struct<V>(mut self, _: &'static [&'static str], visitor: V) -> Result<V::Value>
-        where V: Visitor
-    {
-        // struct variants are encoded as a tuple with the discriminant and then the encoded struct
-        // so the encoded struct should just be the next element
-        if self.count == 0 {
-            return Err(Error::simple(Reason::EndOfStream));
-        }
-
-        self.count -= 1;
-
-        // universal function call syntax because I'm lazy
         ::serde::Deserializer::deserialize(self.de, visitor)
     }
 
-    fn visit_newtype_seed<T>(mut self, seed: T) -> Result<T::Value>
+    fn visit_struct<V>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value>
+        where V: Visitor
+    {
+        ::serde::Deserializer::deserialize(self.de, visitor)
+    }
+
+    fn visit_newtype_seed<T>(self, seed: T) -> Result<T::Value>
         where T: DeserializeSeed
     {
-        // newtypes are encoded as two-element tuples
-        if self.count == 0 {
-            return Err(Error::simple(Reason::EndOfStream));
-        }
-
-        self.count -= 1;
         seed.deserialize(self.de)
     }
 
     fn visit_unit(self) -> Result<()> {
-        Ok(())
+        Deserialize::deserialize(&mut *self.de)
     }
 }

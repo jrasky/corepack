@@ -141,6 +141,17 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
     fn serialize_unit(&mut self) -> Result<()> {
         (self.output)(&[NIL])
     }
+
+    fn serialize_variant(&mut self, variant_index: usize) -> Result<()> {
+        // Serialize variants as two-tuples with the variant index and its contents.
+        // Because messagepack is purely right-associative, we don't have to track the variant once we get it going.
+
+        // start a two element array
+        (self.output)(&[2u8 | FIXARRAY_MASK])?;
+
+        // encode the variant and done
+        self.serialize_unsigned(variant_index as u64)
+    }
 }
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Serializer<F> {
@@ -154,7 +165,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
 
     type SerializeMap = MapSerializer<'a, F>;
     type SerializeStruct = Self::SerializeMap;
-    type SerializeStructVariant = MapVariantSerializer<'a, F>;
+    type SerializeStructVariant = Self::SerializeMap;
 
     fn serialize_seq(self, len: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
         Ok(SeqSerializer::new(&mut self.output))
@@ -232,28 +243,27 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
     }
 
     fn serialize_unit_variant(self, _: &'static str, index: usize, _: &'static str) -> Result<()> {
-        Serializer::serialize_unsigned(self, index as u64)
+        self.serialize_variant(index)?;
+        self.serialize_unit()
     }
 
     fn serialize_newtype_struct<T>(self, name: &'static str, value: &T) -> Result<()>
         where T: ?Sized + serde::Serialize
     {
-        let mut seq = self.serialize_tuple_struct(name, 1)?;
-        SerializeTupleStruct::serialize_field(&mut seq, &value)?;
-        SerializeTupleStruct::end(seq)
+        // serialize newtypes directly
+        value.serialize(self)
     }
 
     fn serialize_newtype_variant<T>(self,
                                     name: &'static str,
                                     variant_index: usize,
-                                    variant: &'static str,
+                                    _: &'static str,
                                     value: &T)
                                     -> Result<()>
         where T: ?Sized + serde::Serialize
     {
-        let mut seq = self.serialize_tuple_variant(name, variant_index, variant, 1)?;
-        SerializeTupleStruct::serialize_field(&mut seq, &value)?;
-        SerializeTupleStruct::end(seq)
+        self.serialize_variant(variant_index)?;
+        self.serialize_newtype_struct(name, value)
     }
 
     fn serialize_none(self) -> Result<()> {
@@ -282,16 +292,13 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
     }
 
     fn serialize_tuple_variant(self,
-                               _: &'static str,
+                               name: &'static str,
                                index: usize,
                                _: &'static str,
                                len: usize)
                                -> result::Result<Self::SerializeTupleVariant, Error> {
-        let mut seq = self.serialize_tuple(len + 1)?;
-        // serialize the variant index as an extra element at the front
-        seq.serialize_element(&index)?;
-
-        Ok(seq)
+        self.serialize_variant(index)?;
+        self.serialize_tuple_struct(name, len)
     }
 
     fn serialize_struct(self,
@@ -305,9 +312,10 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
                                 name: &'static str,
                                 index: usize,
                                 _: &'static str,
-                                _: usize)
+                                len: usize)
                                 -> result::Result<Self::SerializeStructVariant, Error> {
-        Ok(MapVariantSerializer::new(index, &mut self.output))
+        self.serialize_variant(index)?;
+        self.serialize_struct(name, len)
     }
 }
 

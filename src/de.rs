@@ -46,7 +46,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 visitor.visit_string(try!(String::from_utf8(buf)
                     .map_err(|e| Error::new(Reason::UTF8Error, format!("{}", e)))))
             }
-            NIL => visitor.visit_none(),
+            NIL => visitor.visit_unit(),
             FALSE => visitor.visit_bool(false),
             TRUE => visitor.visit_bool(true),
             BIN8 => {
@@ -416,12 +416,12 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
 
     fn deserialize_enum<V>(self,
                            _: &'static str,
-                           _: &'static [&'static str],
+                           variants: &'static [&'static str],
                            mut visitor: V)
                            -> Result<V::Value>
         where V: serde::de::Visitor
     {
-        visitor.visit_enum(VariantVisitor::new(self, 0))
+        visitor.visit_enum(VariantVisitor::new(self, variants))
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>

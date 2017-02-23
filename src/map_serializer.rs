@@ -1,7 +1,7 @@
 use collections::Vec;
 
 use serde::ser::{Serialize, SerializeSeq, SerializeMap, SerializeTupleVariant, SerializeStruct,
-                 SerializeTuple, SerializeTupleStruct};
+                 SerializeTuple, SerializeTupleStruct, SerializeStructVariant};
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
 
@@ -85,6 +85,22 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeMap for MapSerializer<'a, 
 }
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStruct for MapSerializer<'a, F> {
+    type Ok = ();
+    type Error = Error;
+
+    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
+        where T: ?Sized + Serialize
+    {
+        MapSerializer::serialize_entry(self, key, value)
+    }
+
+    fn end(self) -> Result<()> {
+        MapSerializer::finish(self)
+    }
+}
+
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStructVariant
+    for MapSerializer<'a, F> {
     type Ok = ();
     type Error = Error;
 
