@@ -14,7 +14,7 @@ serde = { version = "~0.9.8", default-features = false, features = ["collections
 byteorder = { version = "~1.0", default-features = false }
 
 [dev-dependencies]
-serde_derive = { version = "~0.9.8", features = ["unstable"] }
+serde_derive = "~0.9.8"
 
 [features]
 default = []
