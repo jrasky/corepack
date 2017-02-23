@@ -1,12 +1,14 @@
 [package]
 name = "corepack"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Jerome Rasky <jyrome.112@gmail.com>"]
 
 [dependencies]
 serde = { version = "0.9", default-features = false, features = ["collections"] }
-serde_derive = { version = "0.9", features = ["unstable"] }
 byteorder = { version = "1.0", default-features = false }
+
+[dev-dependencies]
+serde_derive = { version = "0.9", features = ["unstable"] }
 
 [features]
 default = []

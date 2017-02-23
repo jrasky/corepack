@@ -32,6 +32,7 @@ mod map_serializer;
 mod variant_visitor;
 mod ext_visitor;
 mod seq_visitor;
+
 pub mod error;
 pub mod ser;
 pub mod de;
