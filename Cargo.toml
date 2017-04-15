@@ -12,8 +12,7 @@ license = "MPL-2.0"
 [dependencies]
 serde = { version = "~0.9.8", default-features = false, features = ["collections"] }
 byteorder = { version = "~1.0", default-features = false }
-
-[dev-dependencies]
+#[dev-dependencies]
 serde_derive = "~0.9.8"
 
 [features]

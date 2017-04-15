@@ -148,4 +148,9 @@ mod test {
             b: "Hello world!".into(),
         })
     }
+
+    #[test]
+    fn test_option() {
+        test_through(Some(7))
+    }
 }
