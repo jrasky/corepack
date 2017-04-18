@@ -20,12 +20,13 @@ use error::*;
 /// the next bytes availabel into the given byte buffer.
 pub struct Deserializer<F: FnMut(&mut [u8]) -> Result<()>> {
     input: F,
+    peek_ty: Option<u8>
 }
 
 impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
     /// Create a new Deserializer given an input function.
     pub const fn new(input: F) -> Deserializer<F> {
-        Deserializer { input: input }
+        Deserializer { input: input, peek_ty: None }
     }
 
     fn parse_as<V>(&mut self, visitor: V, ty: u8) -> Result<V::Value>
@@ -241,9 +242,13 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
     fn deserialize<V>(self, visitor: V) -> Result<V::Value>
         where V: serde::de::Visitor
     {
-        let mut buf = [0];
-        try!((self.input)(&mut buf));
-        self.parse_as(visitor, buf[0])
+        if let Some(ty) = self.peek_ty.take() {
+            self.parse_as(visitor, ty)
+        } else {
+            let mut buf = [0];
+            try!((self.input)(&mut buf));
+            self.parse_as(visitor, buf[0])
+        }
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
@@ -339,23 +344,16 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
         where V: serde::de::Visitor
     {
-        // let mut buf = [0];
-        // try!((self.input)(&mut buf));
-        // let ty = buf[0];
+        let mut buf = [0];
+        try!((self.input)(&mut buf));
+        let ty = buf[0];
 
-        // if ty == NIL {
-        //     visitor.visit_none()
-        // } else {
-        //     visitor.visit_some(self)
-        // }
-
-        /*
-        We have to call visit_some with a deserializer argument before visiting the actual
-        value. This is a problem because I wanted the only state in Deserializer to be the
-        input function. It might be useful to add a "peek" function that lets us look ahead
-        for cases like this.
-        */
-        self.deserialize(visitor)
+        if ty == NIL {
+            visitor.visit_none()
+        } else {
+            self.peek_ty = Some(ty);
+            visitor.visit_some(self)
+        }
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
