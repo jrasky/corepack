@@ -29,8 +29,8 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
         Deserializer { input: input, peek_ty: None }
     }
 
-    fn parse_as<V>(&mut self, visitor: V, ty: u8) -> Result<V::Value>
-        where V: serde::de::Visitor
+    fn parse_as<'a, V>(&mut self, visitor: V, ty: u8) -> Result<V::Value>
+        where V: serde::de::Visitor<'a>
     {
         match ty {
             v if POS_FIXINT.contains(v) => visitor.visit_u8(v),
@@ -236,11 +236,11 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Deserializer<F> {
+impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'a mut Deserializer<F> {
     type Error = Error;
 
-    fn deserialize<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
+        where V: serde::de::Visitor<'a>
     {
         if let Some(ty) = self.peek_ty.take() {
             self.parse_as(visitor, ty)
@@ -252,97 +252,97 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_u64(visitor)
     }
 
     fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_u64(visitor)
     }
 
     fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_u64(visitor)
     }
 
     fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_i64(visitor)
     }
 
     fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_i64(visitor)
     }
 
     fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_i64(visitor)
     }
 
     fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_f64(visitor)
     }
 
     fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_str(visitor)
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_str(visitor)
     }
 
     fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         let mut buf = [0];
         try!((self.input)(&mut buf));
@@ -357,45 +357,39 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
     }
 
     fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
-    }
-
-    fn deserialize_seq_fixed_size<V>(self, _: usize, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
-    {
-        self.deserialize_seq(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_unit_struct<V>(self, _: &'static str, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_unit(visitor)
     }
 
     fn deserialize_newtype_struct<V>(self, _: &'static str, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 
     fn deserialize_tuple_struct<V>(self,
@@ -403,7 +397,7 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
                                    len: usize,
                                    visitor: V)
                                    -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_tuple(len, visitor)
     }
@@ -413,21 +407,15 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
                              _: &'static [&'static str],
                              visitor: V)
                              -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         self.deserialize_map(visitor)
     }
 
-    fn deserialize_struct_field<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+    fn deserialize_tuple<V>(self, _: usize, visitor: V) -> Result<V::Value>
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
-    }
-
-    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
-    {
-        self.deserialize_seq_fixed_size(len, visitor)
+        self.deserialize_seq(visitor)
     }
 
     fn deserialize_enum<V>(self,
@@ -435,15 +423,15 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer for &'a mut Dese
                            variants: &'static [&'static str],
                            visitor: V)
                            -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
         visitor.visit_enum(VariantVisitor::new(self, variants))
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
-        where V: serde::de::Visitor
+        where V: serde::de::Visitor<'a>
     {
-        self.deserialize(visitor)
+        self.deserialize_any(visitor)
     }
 }
 

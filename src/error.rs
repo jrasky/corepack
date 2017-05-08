@@ -57,7 +57,7 @@ pub struct Error {
     reason: Reason,
     detail: String,
     #[cfg(not(feature = "std"))]
-    cause: Option<Box<::serde::error::Error>>,
+    cause: Option<Box<::serde::de::Error>>,
     #[cfg(feature = "std")]
     cause: Option<Box<::std::error::Error>>,
 }
@@ -92,7 +92,7 @@ impl Error {
     #[cfg(not(feature = "std"))]
     pub const fn chain(reason: Reason,
                        detail: String,
-                       cause: Option<Box<::serde::error::Error>>)
+                       cause: Option<Box<::serde::de::Error>>)
                        -> Error {
         Error {
             reason: reason,
@@ -123,21 +123,6 @@ impl Error {
     /// Create a new error from just a reason.
     pub fn simple(reason: Reason) -> Error {
         Error::new(reason, String::new())
-    }
-}
-
-#[cfg(not(feature = "std"))]
-impl ::serde::error::Error for Error {
-    fn description(&self) -> &str {
-        "Corepack error"
-    }
-
-    fn cause(&self) -> Option<&::serde::error::Error> {
-        if let Some(ref e) = self.cause {
-            Some(e.as_ref())
-        } else {
-            None
-        }
     }
 }
 

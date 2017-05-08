@@ -43,9 +43,9 @@ mod ser;
 mod de;
 
 /// Parse V out of a stream of bytes.
-pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
+pub fn from_iter<'a, I, V>(mut iter: I) -> Result<V, error::Error>
     where I: Iterator<Item = u8>,
-          V: serde::Deserialize
+          V: serde::Deserialize<'a>
 {
     let mut de = Deserializer::new(|buf: &mut [u8]| {
         for i in 0..buf.len() {
@@ -63,8 +63,8 @@ pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
 }
 
 /// Parse V out of a slice of bytes.
-pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
-    where V: serde::Deserialize
+pub fn from_bytes<'a, V>(bytes: &[u8]) -> Result<V, error::Error>
+    where V: serde::Deserialize<'a>
 {
     let mut position: usize = 0;
 
@@ -111,8 +111,8 @@ mod test {
         D { a: isize, b: String },
     }
 
-    fn test_through<T>(expected: T)
-        where T: Serialize + Deserialize + PartialEq + Debug
+    fn test_through<'a, T>(expected: T)
+        where T: Serialize + Deserialize<'a> + PartialEq + Debug
     {
         let x = ::to_bytes(&expected).expect("Failed to serialize");
 

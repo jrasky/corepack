@@ -3,8 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
-use serde::de::{DeserializeSeed, EnumVisitor, Visitor, Deserialize};
-use serde::de::value::ValueDeserializer;
+use serde::de::{DeserializeSeed, EnumAccess, Visitor, Deserialize};
 
 use de::Deserializer;
 
@@ -27,12 +26,12 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> VariantVisitor<'a, F> {
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumVisitor for VariantVisitor<'a, F> {
+impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumAccess<'a> for VariantVisitor<'a, F> {
     type Error = Error;
     type Variant = VariantVisitor<'a, F>;
 
-    fn visit_variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant)>
-        where V: DeserializeSeed
+    fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant)>
+        where V: DeserializeSeed<'a>
     {
         // get the variant index with a one-item tuple
         let variant_index_container: (usize, /* enum-type */) =
@@ -49,28 +48,28 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumVisitor for VariantVisitor<'a, F
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> ::serde::de::VariantVisitor for VariantVisitor<'a, F> {
+impl<'a, F: FnMut(&mut [u8]) -> Result<()>> ::serde::de::VariantAccess<'a> for VariantVisitor<'a, F> {
     type Error = Error;
 
-    fn visit_tuple<V>(self, _: usize, visitor: V) -> Result<V::Value>
-        where V: Visitor
+    fn tuple_variant<V>(self, _: usize, visitor: V) -> Result<V::Value>
+        where V: Visitor<'a>
     {
         ::serde::Deserializer::deserialize(self.de, visitor)
     }
 
-    fn visit_struct<V>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value>
-        where V: Visitor
+    fn struct_variant<V>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value>
+        where V: Visitor<'a>
     {
         ::serde::Deserializer::deserialize(self.de, visitor)
     }
 
-    fn visit_newtype_seed<T>(self, seed: T) -> Result<T::Value>
-        where T: DeserializeSeed
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
+        where T: DeserializeSeed<'a>
     {
         seed.deserialize(self.de)
     }
 
-    fn visit_unit(self) -> Result<()> {
+    fn unit_variant(self) -> Result<()> {
         Deserialize::deserialize(&mut *self.de)
     }
 }

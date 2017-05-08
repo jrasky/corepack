@@ -5,9 +5,7 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use collections::Vec;
 
-use serde::de::{MapVisitor, DeserializeSeed};
-use serde::de::value::ValueDeserializer;
-use serde::bytes::Bytes;
+use serde::de::{MapAccess, DeserializeSeed, IntoDeserializer};
 
 use defs::*;
 use error::*;
@@ -28,34 +26,33 @@ impl ExtVisitor {
     }
 }
 
-impl MapVisitor for ExtVisitor {
+impl<'a> MapAccess<'a> for ExtVisitor {
     type Error = Error;
 
-    fn visit_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
-        where T: DeserializeSeed
+    fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+        where T: DeserializeSeed<'a>
     {
         if self.state == 0 {
-            let de = ValueDeserializer::<Error>::into_deserializer("type");
+            let de = "type".into_deserializer();
             Ok(Some(try!(seed.deserialize(de))))
         } else if self.state == 1 {
-            let de = ValueDeserializer::<Error>::into_deserializer("data");
+            let de = "data".into_deserializer();
             Ok(Some(try!(seed.deserialize(de))))
         } else {
             Ok(None)
         }
     }
 
-    fn visit_value_seed<T>(&mut self, seed: T) -> Result<T::Value>
-        where T: DeserializeSeed
+    fn next_value_seed<T>(&mut self, seed: T) -> Result<T::Value>
+        where T: DeserializeSeed<'a>
     {
         if self.state == 0 {
             self.state += 1;
-            let de = ValueDeserializer::<Error>::into_deserializer(self.ty);
+            let de = self.ty.into_deserializer();
             Ok(try!(seed.deserialize(de)))
         } else if self.state == 1 {
             self.state += 1;
-            let de = ValueDeserializer::<Error>::into_deserializer(Bytes::from(self.data
-                .as_slice()));
+            let de = self.data.as_slice().into_deserializer();
             Ok(try!(seed.deserialize(de)))
         } else {
             Err(Error::simple(Reason::EndOfStream))
