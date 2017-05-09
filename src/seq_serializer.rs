@@ -6,22 +6,24 @@
 use collections::Vec;
 
 use serde::ser::{Serialize, SerializeSeq, SerializeTupleVariant, SerializeTuple,
-                 SerializeTupleStruct, Error};
+                 SerializeTupleStruct};
 
 use byteorder::{ByteOrder, BigEndian};
 
 use ser::Serializer;
 
+use error::Error;
+
 use defs::*;
 
-pub struct SeqSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<()>> {
+pub struct SeqSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> {
     count: usize,
     size: Option<usize>,
     buffer: Vec<u8>,
     output: &'a mut F,
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SeqSerializer<'a, F> {
     pub fn new(output: &'a mut F) -> SeqSerializer<'a, F> {
         SeqSerializer {
             count: 0,
@@ -31,7 +33,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
         }
     }
 
-    pub fn hint_size(&mut self, size: Option<usize>) -> Result<()> {
+    pub fn hint_size(&mut self, size: Option<usize>) -> Result<(), Error> {
         self.size = size;
 
         if let Some(size) = self.size {
@@ -42,7 +44,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
         }
     }
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         self.count += 1;
@@ -54,7 +56,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
         }
     }
 
-    fn finish(mut self) -> Result<()> {
+    fn finish(mut self) -> Result<(), Error> {
         if let Some(size) = self.size {
             self.check_item_count_matches_size(size)?;
             Ok(())
@@ -65,9 +67,9 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
         }
     }
 
-    fn check_item_count_matches_size(&self, size: usize) -> Result<()> {
+    fn check_item_count_matches_size(&self, size: usize) -> Result<(), Error> {
         if size != self.count {
-            Err(Error::custom("Bad length"))
+            Err(Error::BadLength)
         } else {
             Ok(())
         }
@@ -77,7 +79,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
         self.size.is_some()
     }
 
-    fn serialize_into_buffer<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_into_buffer<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         let mut target = Serializer::new(|bytes| {
@@ -88,7 +90,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
         value.serialize(&mut target)
     }
 
-    fn serialize_directly<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_directly<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         let mut target = Serializer::new(|bytes| (self.output)(bytes));
@@ -96,7 +98,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
         value.serialize(&mut target)
     }
 
-    fn output_sequence_header(&mut self, size: usize) -> Result<()> {
+    fn output_sequence_header(&mut self, size: usize) -> Result<(), Error> {
         if size <= MAX_FIXARRAY {
             (self.output)(&[size as u8 | FIXARRAY_MASK])
         } else if size <= MAX_ARRAY16 {
@@ -108,67 +110,67 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
             BigEndian::write_u32(&mut buf[1..], size as u32);
             (self.output)(&buf)
         } else {
-            Err(Error::custom("Too big"))
+            Err(Error::TooBig)
         }
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeSeq for SeqSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeSeq for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         SeqSerializer::serialize_element(self, value)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> Result<(), Error> {
         SeqSerializer::finish(self)
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTupleVariant for SeqSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeTupleVariant for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn serialize_field<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         SeqSerializer::serialize_element(self, value)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> Result<(), Error> {
         SeqSerializer::finish(self)
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTupleStruct for SeqSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeTupleStruct for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn serialize_field<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         SeqSerializer::serialize_element(self, value)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> Result<(), Error> {
         SeqSerializer::finish(self)
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTuple for SeqSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeTuple for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         SeqSerializer::serialize_element(self, value)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> Result<(), Error> {
         SeqSerializer::finish(self)
     }
 }

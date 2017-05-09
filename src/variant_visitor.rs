@@ -6,17 +6,18 @@
 use collections::borrow::ToOwned;
 
 use serde::de::{IntoDeserializer, DeserializeSeed, EnumAccess, Visitor, Deserialize};
+use serde::de::value::StringDeserializer;
 
 use de::Deserializer;
 
-use defs::*;
+use error::Error;
 
-pub struct VariantVisitor<'a, F: 'a + FnMut(&mut [u8]) -> Result<()>> {
+pub struct VariantVisitor<'a, F: 'a + FnMut(&mut [u8]) -> Result<(), Error>> {
     de: &'a mut Deserializer<F>,
     variants: &'static [&'static str],
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> VariantVisitor<'a, F> {
+impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> VariantVisitor<'a, F> {
     pub fn new(de: &'a mut Deserializer<F>,
                variants: &'static [&'static str])
                -> VariantVisitor<'a, F> {
@@ -27,11 +28,11 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> VariantVisitor<'a, F> {
     }
 }
 
-impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> EnumAccess<'a> for VariantVisitor<'b, F> {
-    type Error = ::serde::de::value::Error;
+impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<(), Error>> EnumAccess<'a> for VariantVisitor<'b, F> {
+    type Error = Error;
     type Variant = VariantVisitor<'b, F>;
 
-    fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant)>
+    fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant), Error>
         where V: DeserializeSeed<'a>
     {
         // get the variant index with a one-item tuple
@@ -43,34 +44,36 @@ impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> EnumAccess<'a> for VariantVisito
         let (variant_index, /* enum-value */) = variant_index_container;
 
         // translate that to the name of the variant
-        let value = seed.deserialize(self.variants[variant_index].to_owned().into_deserializer())?;
+        let name = self.variants[variant_index].to_owned();
+        let de: StringDeserializer<Error> = name.into_deserializer();
+        let value = seed.deserialize(de)?;
 
         Ok((value, self))
     }
 }
 
-impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> ::serde::de::VariantAccess<'a> for VariantVisitor<'b, F> {
-    type Error = ::serde::de::value::Error;
+impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<(), Error>> ::serde::de::VariantAccess<'a> for VariantVisitor<'b, F> {
+    type Error = Error;
 
-    fn tuple_variant<V>(self, _: usize, visitor: V) -> Result<V::Value>
+    fn tuple_variant<V>(self, _: usize, visitor: V) -> Result<V::Value, Error>
         where V: Visitor<'a>
     {
         ::serde::Deserializer::deserialize_any(self.de, visitor)
     }
 
-    fn struct_variant<V>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value>
+    fn struct_variant<V>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value, Error>
         where V: Visitor<'a>
     {
         ::serde::Deserializer::deserialize_any(self.de, visitor)
     }
 
-    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
+    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Error>
         where T: DeserializeSeed<'a>
     {
         seed.deserialize(self.de)
     }
 
-    fn unit_variant(self) -> Result<()> {
+    fn unit_variant(self) -> Result<(), Error> {
         Deserialize::deserialize(&mut *self.de)
     }
 }

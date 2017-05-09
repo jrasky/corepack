@@ -6,22 +6,15 @@
 use std::fmt::Display;
 
 use collections::String;
-
-use alloc::boxed::Box;
+use collections::string::{ToString, FromUtf8Error};
 
 use std::fmt;
 
 /// Reasons that parsing or encoding might fail in corepack.
-#[derive(Debug, Clone, Copy)]
-pub enum Reason {
+#[derive(Debug)]
+pub enum Error {
     /// Container or sequence was too big to serialize.
     TooBig,
-
-    /// Extra items remained after deserializing a sequence.
-    ExtraItems,
-
-    /// Invalid value encountered.
-    BadValue,
 
     /// Reached end of a stream.
     EndOfStream,
@@ -32,118 +25,55 @@ pub enum Reason {
     /// Invalid length encountered.
     BadLength,
 
-    /// Encountered an unknown enum variant.
-    BadVariant,
-
-    /// Unknown field included in struct.
-    BadField,
-
-    /// Missing field from struct.
-    NoField,
-
-    /// Duplicate field found in struct.
-    DupField,
-
     /// Error decoding UTF8 string.
-    UTF8Error,
+    UTF8Error(FromUtf8Error),
 
     /// Some other error that does not fit into the above.
-    Other,
-}
-
-/// Error struct for corepack errors.
-#[derive(Debug)]
-pub struct Error {
-    reason: Reason,
-    detail: String,
-    #[cfg(not(feature = "std"))]
-    cause: Option<Box<::serde::de::Error>>,
-    #[cfg(feature = "std")]
-    cause: Option<Box<::std::error::Error>>,
+    Other(String),
 }
 
 impl Display for Error {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let name = match self.reason {
-            Reason::TooBig => "Overflowing value",
-            Reason::ExtraItems => "More items that expected",
-            Reason::BadValue => "Invalid value",
-            Reason::EndOfStream => "End of stream",
-            Reason::BadType => "Invalid type",
-            Reason::BadLength => "Invalid length",
-            Reason::BadVariant => "Unknown variant",
-            Reason::BadField => "Unknown field",
-            Reason::NoField => "Missing field",
-            Reason::DupField => "Duplicate field",
-            Reason::UTF8Error => "UTF-8 encoding error",
-            Reason::Other => "Other error",
-        };
-
-        if !self.detail.is_empty() {
-            write!(fmt, "{}: {}", name, self.detail)
-        } else {
-            write!(fmt, "{}", name)
-        }
+        fmt.write_str(self.description())
     }
 }
 
 impl Error {
-    /// Wrap an error in a new error, for context.
-    #[cfg(not(feature = "std"))]
-    pub const fn chain(reason: Reason,
-                       detail: String,
-                       cause: Option<Box<::serde::de::Error>>)
-                       -> Error {
-        Error {
-            reason: reason,
-            detail: detail,
-            cause: cause,
+    fn description(&self) -> &str {
+        match self {
+            &Error::TooBig => "Overflowing value",
+            &Error::EndOfStream => "End of stream",
+            &Error::BadType => "Invalid type",
+            &Error::BadLength => "Invalid length",
+            &Error::UTF8Error(_) => "UTF8 Error",
+            &Error::Other(ref message) => &message,
         }
     }
+}
 
-    /// Wrap an error in a new error, for context.
-    #[cfg(feature = "std")]
-    pub const fn chain(reason: Reason,
-                       detail: String,
-                       cause: Option<Box<::std::error::Error>>)
-                       -> Error {
-        Error {
-            reason: reason,
-            detail: detail,
-            cause: cause,
-        }
-    }
-
-    /// Create a new error without chaining a cause.
-    pub const fn new(reason: Reason, detail: String) -> Error {
-        Error::chain(reason, detail, None)
-    }
-
-
-    /// Create a new error from just a reason.
-    pub fn simple(reason: Reason) -> Error {
-        Error::new(reason, String::new())
+impl From<FromUtf8Error> for Error {
+    fn from(cause: FromUtf8Error) -> Error {
+        Error::UTF8Error(cause)
     }
 }
 
 #[cfg(feature = "std")]
 impl ::std::error::Error for Error {
     fn description(&self) -> &str {
-        "Corepack error"
+        Error::description()
     }
 
     fn cause(&self) -> Option<&::std::error::Error> {
-        if let Some(ref e) = self.cause {
-            Some(e.as_ref())
-        } else {
-            None
+        match self {
+            &Error::UTF8Error(ref cause) => Some(cause),
+            _ => None
         }
     }
 }
 
 impl ::serde::ser::Error for Error {
     fn custom<T: Display>(msg: T) -> Error {
-        Error::new(Reason::Other, format!("{}", msg))
+        Error::Other(msg.to_string())
     }
 }
 

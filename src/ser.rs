@@ -9,26 +9,26 @@ use collections::String;
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
 
-use serde::de::Error;
-
 use serde;
+
+use error::Error;
 
 use defs::*;
 use seq_serializer::*;
 use map_serializer::*;
 
 /// The corepack Serializer. Contains a closure that receives byte buffers as the output is created.
-pub struct Serializer<F: FnMut(&[u8]) -> Result<()>> {
+pub struct Serializer<F: FnMut(&[u8]) -> Result<(), Error>> {
     output: F,
 }
 
-impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
+impl<F: FnMut(&[u8]) -> Result<(), Error>> Serializer<F> {
     /// Create a new Deserializer given an input function.
     pub const fn new(output: F) -> Serializer<F> {
         Serializer { output: output }
     }
 
-    fn serialize_signed(&mut self, value: i64) -> Result<()> {
+    fn serialize_signed(&mut self, value: i64) -> Result<(), Error> {
         if value >= FIXINT_MIN as i64 && value <= FIXINT_MAX as i64 {
             let mut buf = [0; U16_BYTES];
             LittleEndian::write_i16(&mut buf, value as i16);
@@ -64,7 +64,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
         }
     }
 
-    fn serialize_unsigned(&mut self, value: u64) -> Result<()> {
+    fn serialize_unsigned(&mut self, value: u64) -> Result<(), Error> {
         if value <= FIXINT_MAX as u64 {
             (self.output)(&[value as u8])
         } else if value <= u8::max_value() as u64 {
@@ -84,7 +84,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
         }
     }
 
-    fn serialize_bool(&mut self, value: bool) -> Result<()> {
+    fn serialize_bool(&mut self, value: bool) -> Result<(), Error> {
         if value {
             (self.output)(&[TRUE])
         } else {
@@ -92,19 +92,19 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
         }
     }
 
-    fn serialize_f32(&mut self, value: f32) -> Result<()> {
+    fn serialize_f32(&mut self, value: f32) -> Result<(), Error> {
         let mut buf = [FLOAT32; U32_BYTES + 1];
         BigEndian::write_f32(&mut buf[1..], value);
         (self.output)(&buf)
     }
 
-    fn serialize_f64(&mut self, value: f64) -> Result<()> {
+    fn serialize_f64(&mut self, value: f64) -> Result<(), Error> {
         let mut buf = [FLOAT64; U64_BYTES + 1];
         BigEndian::write_f64(&mut buf[1..], value);
         (self.output)(&buf)
     }
 
-    fn serialize_bytes(&mut self, value: &[u8]) -> Result<()> {
+    fn serialize_bytes(&mut self, value: &[u8]) -> Result<(), Error> {
         if value.len() <= MAX_BIN8 {
             try!((self.output)(&[BIN8, value.len() as u8]));
         } else if value.len() <= MAX_BIN16 {
@@ -116,13 +116,13 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
             BigEndian::write_u32(&mut buf[1..], value.len() as u32);
             try!((self.output)(&buf));
         } else {
-            return Err(Error::custom("Too big"));
+            return Err(Error::TooBig);
         }
 
         (self.output)(value)
     }
 
-    fn serialize_str(&mut self, value: &str) -> Result<()> {
+    fn serialize_str(&mut self, value: &str) -> Result<(), Error> {
         if value.len() <= MAX_FIXSTR {
             try!((self.output)(&[value.len() as u8 | FIXSTR_MASK]));
         } else if value.len() <= MAX_STR8 {
@@ -136,17 +136,17 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
             BigEndian::write_u32(&mut buf[1..], value.len() as u32);
             try!((self.output)(&buf));
         } else {
-            return Err(Error::custom("Too big"));
+            return Err(Error::TooBig);
         }
 
         (self.output)(value.as_bytes())
     }
 
-    fn serialize_unit(&mut self) -> Result<()> {
+    fn serialize_unit(&mut self) -> Result<(), Error> {
         (self.output)(&[NIL])
     }
 
-    fn serialize_variant(&mut self, variant_index: u32) -> Result<()> {
+    fn serialize_variant(&mut self, variant_index: u32) -> Result<(), Error> {
         // Serialize variants as two-tuples with the variant index and its contents.
         // Because messagepack is purely right-associative, we don't have to track
         // the variant once we get it going.
@@ -159,9 +159,9 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Serializer<F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> serde::Serializer for &'a mut Serializer<F> {
     type Ok = ();
-    type Error = serde::de::value::Error;
+    type Error = Error;
 
     type SerializeSeq = SeqSerializer<'a, F>;
     type SerializeTuple = Self::SerializeSeq;
@@ -188,79 +188,79 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
         Ok(map)
     }
 
-    fn serialize_bool(self, v: bool) -> Result<()> {
+    fn serialize_bool(self, v: bool) -> Result<(), Error> {
         Serializer::serialize_bool(self, v)
     }
 
-    fn serialize_i64(self, value: i64) -> Result<()> {
+    fn serialize_i64(self, value: i64) -> Result<(), Error> {
         Serializer::serialize_signed(self, value)
     }
 
-    fn serialize_u64(self, value: u64) -> Result<()> {
+    fn serialize_u64(self, value: u64) -> Result<(), Error> {
         Serializer::serialize_unsigned(self, value)
     }
 
-    fn serialize_f32(self, value: f32) -> Result<()> {
+    fn serialize_f32(self, value: f32) -> Result<(), Error> {
         Serializer::serialize_f32(self, value)
     }
 
-    fn serialize_f64(self, value: f64) -> Result<()> {
+    fn serialize_f64(self, value: f64) -> Result<(), Error> {
         Serializer::serialize_f64(self, value)
     }
 
-    fn serialize_bytes(self, value: &[u8]) -> Result<()> {
+    fn serialize_bytes(self, value: &[u8]) -> Result<(), Error> {
         Serializer::serialize_bytes(self, value)
     }
 
-    fn serialize_str(self, value: &str) -> Result<()> {
+    fn serialize_str(self, value: &str) -> Result<(), Error> {
         Serializer::serialize_str(self, value)
     }
 
-    fn serialize_unit(self) -> Result<()> {
+    fn serialize_unit(self) -> Result<(), Error> {
         Serializer::serialize_unit(self)
     }
 
-    fn serialize_i8(self, value: i8) -> Result<()> {
+    fn serialize_i8(self, value: i8) -> Result<(), Error> {
         Serializer::serialize_signed(self, value as i64)
     }
 
-    fn serialize_i16(self, value: i16) -> Result<()> {
+    fn serialize_i16(self, value: i16) -> Result<(), Error> {
         Serializer::serialize_signed(self, value as i64)
     }
 
-    fn serialize_i32(self, value: i32) -> Result<()> {
+    fn serialize_i32(self, value: i32) -> Result<(), Error> {
         Serializer::serialize_signed(self, value as i64)
     }
 
-    fn serialize_u8(self, value: u8) -> Result<()> {
+    fn serialize_u8(self, value: u8) -> Result<(), Error> {
         Serializer::serialize_unsigned(self, value as u64)
     }
 
-    fn serialize_u16(self, value: u16) -> Result<()> {
+    fn serialize_u16(self, value: u16) -> Result<(), Error> {
         Serializer::serialize_unsigned(self, value as u64)
     }
 
-    fn serialize_u32(self, value: u32) -> Result<()> {
+    fn serialize_u32(self, value: u32) -> Result<(), Error> {
         Serializer::serialize_unsigned(self, value as u64)
     }
 
-    fn serialize_char(self, v: char) -> Result<()> {
+    fn serialize_char(self, v: char) -> Result<(), Error> {
         let mut string = String::new();
         string.push(v);
 
         self.serialize_str(&*string)
     }
 
-    fn serialize_unit_struct(self, _: &'static str) -> Result<()> {
+    fn serialize_unit_struct(self, _: &'static str) -> Result<(), Error> {
         self.serialize_unit()
     }
 
-    fn serialize_unit_variant(self, _: &'static str, index: u32, _: &'static str) -> Result<()> {
+    fn serialize_unit_variant(self, _: &'static str, index: u32, _: &'static str) -> Result<(), Error> {
         self.serialize_variant(index)?;
         self.serialize_unit()
     }
 
-    fn serialize_newtype_struct<T>(self, _: &'static str, value: &T) -> Result<()>
+    fn serialize_newtype_struct<T>(self, _: &'static str, value: &T) -> Result<(), Error>
         where T: ?Sized + serde::Serialize
     {
         // serialize newtypes directly
@@ -272,18 +272,18 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
                                     variant_index: u32,
                                     _: &'static str,
                                     value: &T)
-                                    -> Result<()>
+                                    -> Result<(), Error>
         where T: ?Sized + serde::Serialize
     {
         self.serialize_variant(variant_index)?;
         self.serialize_newtype_struct(name, value)
     }
 
-    fn serialize_none(self) -> Result<()> {
+    fn serialize_none(self) -> Result<(), Error> {
         self.serialize_unit()
     }
 
-    fn serialize_some<V>(self, value: &V) -> Result<()>
+    fn serialize_some<V>(self, value: &V) -> Result<(), Self::Error>
         where V: ?Sized + serde::Serialize
     {
         value.serialize(self)

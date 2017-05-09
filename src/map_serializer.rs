@@ -5,22 +5,23 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use collections::Vec;
 
-use serde::ser::{Serialize, SerializeMap, SerializeStruct, SerializeStructVariant, Error};
+use serde::ser::{Serialize, SerializeMap, SerializeStruct, SerializeStructVariant};
 
 use byteorder::{ByteOrder, BigEndian};
 
 use ser::Serializer;
 
 use defs::*;
+use error::Error;
 
-pub struct MapSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<()>> {
+pub struct MapSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> {
     count: usize,
     size: Option<usize>,
     buffer: Vec<u8>,
     output: &'a mut F,
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> MapSerializer<'a, F> {
     pub fn new(output: &'a mut F) -> MapSerializer<'a, F> {
         MapSerializer {
             count: 0,
@@ -30,7 +31,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
         }
     }
 
-    pub fn hint_size(&mut self, size: Option<usize>) -> Result<()> {
+    pub fn hint_size(&mut self, size: Option<usize>) -> Result<(), Error> {
         self.size = size;
 
         if let Some(size) = self.size {
@@ -41,7 +42,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
         }
     }
 
-    fn serialize_element<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         self.count += 1;
@@ -53,7 +54,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
         }
     }
 
-    fn finish(mut self) -> Result<()> {
+    fn finish(mut self) -> Result<(), Error> {
         if let Some(size) = self.size {
             self.check_item_count_matches_size(size * 2)?;
             Ok(())
@@ -64,7 +65,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
         }
     }
 
-    fn output_map_header(&mut self, size: usize) -> Result<()> {
+    fn output_map_header(&mut self, size: usize) -> Result<(), Error> {
         if size <= MAX_FIXMAP {
             (self.output)(&[size as u8 | FIXMAP_MASK])
         } else if size <= MAX_MAP16 {
@@ -76,21 +77,21 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
             BigEndian::write_u32(&mut buf[1..], size as u32);
             (self.output)(&buf)
         } else {
-            Err(Error::custom("Too big"))
+            Err(Error::TooBig)
         }
     }
 
-    fn get_item_count(&self) -> Result<usize> {
+    fn get_item_count(&self) -> Result<usize, Error> {
         if self.count % 1 != 0 {
-            Err(Error::custom("Bad length"))
+            Err(Error::BadLength)
         } else {
             Ok(self.count / 2)
         }
     }
 
-    fn check_item_count_matches_size(&self, size: usize) -> Result<()> {
+    fn check_item_count_matches_size(&self, size: usize) -> Result<(), Error> {
         if size != self.count {
-            Err(Error::custom("Bad length"))
+            Err(Error::BadLength)
         } else {
             Ok(())
         }
@@ -100,7 +101,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
         self.size.is_some()
     }
 
-    fn serialize_into_buffer<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_into_buffer<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         let mut target = Serializer::new(|bytes| {
@@ -111,7 +112,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
         value.serialize(&mut target)
     }
 
-    fn serialize_directly<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_directly<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         let mut target = Serializer::new(|bytes| (self.output)(bytes));
@@ -120,53 +121,53 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeMap for MapSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeMap for MapSerializer<'a, F> {
     type Ok = ();
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn serialize_key<T>(&mut self, key: &T) -> Result<()>
+    fn serialize_key<T>(&mut self, key: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         MapSerializer::serialize_element(self, key)
     }
 
-    fn serialize_value<T>(&mut self, value: &T) -> Result<()>
+    fn serialize_value<T>(&mut self, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         MapSerializer::serialize_element(self, value)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> Result<(), Error> {
         MapSerializer::finish(self)
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStruct for MapSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeStruct for MapSerializer<'a, F> {
     type Ok = ();
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         MapSerializer::serialize_entry(self, key, value)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> Result<(), Error> {
         MapSerializer::finish(self)
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStructVariant for MapSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeStructVariant for MapSerializer<'a, F> {
     type Ok = ();
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
+    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Error>
         where T: ?Sized + Serialize
     {
         MapSerializer::serialize_entry(self, key, value)
     }
 
-    fn end(self) -> Result<()> {
+    fn end(self) -> Result<(), Error> {
         MapSerializer::finish(self)
     }
 }

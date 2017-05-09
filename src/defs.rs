@@ -5,11 +5,6 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use std::ops::RangeInclusive;
 
-use std::result;
-
-// Define our own error type because we always use the same kind of error
-pub type Result<T> = result::Result<T, ::serde::de::value::Error>;
-
 // fixint limits
 pub const FIXINT_MAX: u8 = 0b01111111;
 pub const FIXINT_MIN: i8 = 0b11100000;

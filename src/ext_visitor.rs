@@ -5,9 +5,10 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use collections::Vec;
 
-use serde::de::{MapAccess, DeserializeSeed, IntoDeserializer, Error};
+use serde::de::{MapAccess, DeserializeSeed, IntoDeserializer};
+use serde::de::value::{StrDeserializer, I8Deserializer, SeqDeserializer};
 
-use defs::*;
+use error::Error;
 
 pub struct ExtVisitor {
     state: u8,
@@ -26,35 +27,35 @@ impl ExtVisitor {
 }
 
 impl<'a> MapAccess<'a> for ExtVisitor {
-    type Error = ::serde::de::value::Error;
+    type Error = Error;
 
-    fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
+    fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
         where T: DeserializeSeed<'a>
     {
         if self.state == 0 {
-            let de = "type".into_deserializer();
+            let de: StrDeserializer<Error> = "type".into_deserializer();
             Ok(Some(try!(seed.deserialize(de))))
         } else if self.state == 1 {
-            let de = "data".into_deserializer();
+            let de: StrDeserializer<Error> = "data".into_deserializer();
             Ok(Some(try!(seed.deserialize(de))))
         } else {
             Ok(None)
         }
     }
 
-    fn next_value_seed<T>(&mut self, seed: T) -> Result<T::Value>
+    fn next_value_seed<T>(&mut self, seed: T) -> Result<T::Value, Error>
         where T: DeserializeSeed<'a>
     {
         if self.state == 0 {
             self.state += 1;
-            let de = self.ty.into_deserializer();
+            let de: I8Deserializer<Error> = self.ty.into_deserializer();
             Ok(try!(seed.deserialize(de)))
         } else if self.state == 1 {
             self.state += 1;
-            let de = self.data.clone().into_deserializer();
+            let de: SeqDeserializer<_, Error> = self.data.clone().into_deserializer();
             Ok(try!(seed.deserialize(de)))
         } else {
-            Err(Error::custom("End of stream"))
+            Err(Error::EndOfStream)
         }
     }
 

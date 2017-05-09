@@ -6,7 +6,6 @@
 use collections::String;
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
-use serde::de::Error;
 
 use serde;
 
@@ -15,21 +14,22 @@ use ext_visitor::*;
 use variant_visitor::*;
 
 use defs::*;
+use error::Error;
 
 /// The corepack Deserializer struct. Contains a closure that should copy
 /// the next bytes availabel into the given byte buffer.
-pub struct Deserializer<F: FnMut(&mut [u8]) -> Result<()>> {
+pub struct Deserializer<F: FnMut(&mut [u8]) -> Result<(), Error>> {
     input: F,
     peek_ty: Option<u8>
 }
 
-impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
+impl<F: FnMut(&mut [u8]) -> Result<(), Error>> Deserializer<F> {
     /// Create a new Deserializer given an input function.
     pub const fn new(input: F) -> Deserializer<F> {
         Deserializer { input: input, peek_ty: None }
     }
 
-    fn parse_as<'a, V>(&mut self, visitor: V, ty: u8) -> Result<V::Value>
+    fn parse_as<'a, V>(&mut self, visitor: V, ty: u8) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         match ty {
@@ -47,7 +47,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; (v & !FIXSTR_MASK) as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
+                    .map_err(|e| Into::<Error>::into(e))))
             }
             NIL => visitor.visit_unit(),
             FALSE => visitor.visit_bool(false),
@@ -189,7 +189,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; buf[0] as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
+                    .map_err(|e| Into::<Error>::into(e))))
             }
             STR16 => {
                 let mut buf = [0; U16_BYTES];
@@ -197,7 +197,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; BigEndian::read_u16(&buf) as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
+                    .map_err(|e| Into::<Error>::into(e))))
             }
             STR32 => {
                 let mut buf = [0; U32_BYTES];
@@ -205,7 +205,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; BigEndian::read_u32(&buf) as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
+                    .map_err(|e| Into::<Error>::into(e))))
             }
             ARRAY16 => {
                 let mut buf = [0; U16_BYTES];
@@ -231,15 +231,15 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let size = BigEndian::read_u32(&buf);
                 visitor.visit_map(SeqVisitor::new(self, size as usize * 2))
             }
-            _ => Err(Error::custom("Bad type")),
+            _ => Err(Error::BadType),
         }
     }
 }
 
-impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'b mut Deserializer<F> {
-    type Error = serde::de::value::Error;
+impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<(), Error>> serde::Deserializer<'a> for &'b mut Deserializer<F> {
+    type Error = Error;
 
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         if let Some(ty) = self.peek_ty.take() {
@@ -251,97 +251,97 @@ impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'b 
         }
     }
 
-    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_u64(visitor)
     }
 
-    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_u64(visitor)
     }
 
-    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_u64(visitor)
     }
 
-    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_i64(visitor)
     }
 
-    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_i64(visitor)
     }
 
-    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_i64(visitor)
     }
 
-    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_f64(visitor)
     }
 
-    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         let mut buf = [0];
@@ -356,37 +356,37 @@ impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'b 
         }
     }
 
-    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_unit_struct<V>(self, _: &'static str, visitor: V) -> Result<V::Value>
+    fn deserialize_unit_struct<V>(self, _: &'static str, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_unit(visitor)
     }
 
-    fn deserialize_newtype_struct<V>(self, _: &'static str, visitor: V) -> Result<V::Value>
+    fn deserialize_newtype_struct<V>(self, _: &'static str, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
@@ -396,7 +396,7 @@ impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'b 
                                    _: &'static str,
                                    len: usize,
                                    visitor: V)
-                                   -> Result<V::Value>
+                                   -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_tuple(len, visitor)
@@ -406,13 +406,13 @@ impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'b 
                              _: &'static str,
                              _: &'static [&'static str],
                              visitor: V)
-                             -> Result<V::Value>
+                             -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_map(visitor)
     }
 
-    fn deserialize_tuple<V>(self, _: usize, visitor: V) -> Result<V::Value>
+    fn deserialize_tuple<V>(self, _: usize, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_seq(visitor)
@@ -422,19 +422,19 @@ impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'b 
                            _: &'static str,
                            variants: &'static [&'static str],
                            visitor: V)
-                           -> Result<V::Value>
+                           -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         visitor.visit_enum(VariantVisitor::new(self, variants))
     }
 
-    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value> 
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Error> 
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)
