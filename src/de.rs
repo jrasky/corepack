@@ -6,6 +6,7 @@
 use collections::String;
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
+use serde::de::Error;
 
 use serde;
 
@@ -14,7 +15,6 @@ use ext_visitor::*;
 use variant_visitor::*;
 
 use defs::*;
-use error::*;
 
 /// The corepack Deserializer struct. Contains a closure that should copy
 /// the next bytes availabel into the given byte buffer.
@@ -47,7 +47,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; (v & !FIXSTR_MASK) as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::new(Reason::UTF8Error, format!("{}", e)))))
+                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
             }
             NIL => visitor.visit_unit(),
             FALSE => visitor.visit_bool(false),
@@ -189,7 +189,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; buf[0] as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::new(Reason::UTF8Error, format!("{}", e)))))
+                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
             }
             STR16 => {
                 let mut buf = [0; U16_BYTES];
@@ -197,7 +197,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; BigEndian::read_u16(&buf) as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::new(Reason::UTF8Error, format!("{}", e)))))
+                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
             }
             STR32 => {
                 let mut buf = [0; U32_BYTES];
@@ -205,7 +205,7 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let mut buf = vec![0; BigEndian::read_u32(&buf) as usize];
                 try!((self.input)(buf.as_mut_slice()));
                 visitor.visit_string(try!(String::from_utf8(buf)
-                    .map_err(|e| Error::new(Reason::UTF8Error, format!("{}", e)))))
+                    .map_err(|e| Error::custom(format!("UTF8 Error: {}", e)))))
             }
             ARRAY16 => {
                 let mut buf = [0; U16_BYTES];
@@ -231,13 +231,13 @@ impl<F: FnMut(&mut [u8]) -> Result<()>> Deserializer<F> {
                 let size = BigEndian::read_u32(&buf);
                 visitor.visit_map(SeqVisitor::new(self, size as usize * 2))
             }
-            _ => Err(Error::simple(Reason::BadType)),
+            _ => Err(Error::custom("Bad type")),
         }
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'a mut Deserializer<F> {
-    type Error = Error;
+impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'b mut Deserializer<F> {
+    type Error = serde::de::value::Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
         where V: serde::de::Visitor<'a>
@@ -429,6 +429,12 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> serde::Deserializer<'a> for &'a mut 
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>
+        where V: serde::de::Visitor<'a>
+    {
+        self.deserialize_any(visitor)
+    }
+
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value> 
         where V: serde::de::Visitor<'a>
     {
         self.deserialize_any(visitor)

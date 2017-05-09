@@ -5,14 +5,13 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use collections::Vec;
 
-use serde::ser::{Serialize, SerializeMap, SerializeStruct, SerializeStructVariant};
+use serde::ser::{Serialize, SerializeMap, SerializeStruct, SerializeStructVariant, Error};
 
 use byteorder::{ByteOrder, BigEndian};
 
 use ser::Serializer;
 
 use defs::*;
-use error::*;
 
 pub struct MapSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<()>> {
     count: usize,
@@ -77,13 +76,13 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
             BigEndian::write_u32(&mut buf[1..], size as u32);
             (self.output)(&buf)
         } else {
-            Err(Error::simple(Reason::TooBig))
+            Err(Error::custom("Too big"))
         }
     }
 
     fn get_item_count(&self) -> Result<usize> {
         if self.count % 1 != 0 {
-            Err(Error::simple(Reason::BadLength))
+            Err(Error::custom("Bad length"))
         } else {
             Ok(self.count / 2)
         }
@@ -91,7 +90,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
 
     fn check_item_count_matches_size(&self, size: usize) -> Result<()> {
         if size != self.count {
-            Err(Error::simple(Reason::BadLength))
+            Err(Error::custom("Bad length"))
         } else {
             Ok(())
         }
@@ -123,7 +122,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> MapSerializer<'a, F> {
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeMap for MapSerializer<'a, F> {
     type Ok = ();
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn serialize_key<T>(&mut self, key: &T) -> Result<()>
         where T: ?Sized + Serialize
@@ -144,7 +143,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeMap for MapSerializer<'a, 
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStruct for MapSerializer<'a, F> {
     type Ok = ();
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
         where T: ?Sized + Serialize
@@ -159,7 +158,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStruct for MapSerializer<'
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeStructVariant for MapSerializer<'a, F> {
     type Ok = ();
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
         where T: ?Sized + Serialize

@@ -37,13 +37,11 @@ mod variant_visitor;
 mod ext_visitor;
 mod seq_visitor;
 
-pub mod error;
-
 mod ser;
 mod de;
 
 /// Parse V out of a stream of bytes.
-pub fn from_iter<'a, I, V>(mut iter: I) -> Result<V, error::Error>
+pub fn from_iter<'a, I, V>(mut iter: I) -> Result<V, serde::de::value::Error>
     where I: Iterator<Item = u8>,
           V: serde::Deserialize<'a>
 {
@@ -52,7 +50,7 @@ pub fn from_iter<'a, I, V>(mut iter: I) -> Result<V, error::Error>
             if let Some(byte) = iter.next() {
                 buf[i] = byte;
             } else {
-                return Err(error::Error::simple(error::Reason::EndOfStream));
+                return Err(serde::de::Error::custom("End of stream"));
             }
         }
 
@@ -63,13 +61,13 @@ pub fn from_iter<'a, I, V>(mut iter: I) -> Result<V, error::Error>
 }
 
 /// Parse V out of a slice of bytes.
-pub fn from_bytes<'a, V>(bytes: &[u8]) -> Result<V, error::Error>
+pub fn from_bytes<'a, V>(bytes: &[u8]) -> Result<V, serde::de::value::Error>
     where V: serde::Deserialize<'a>
 {
     let mut position: usize = 0;
 
     let mut de = Deserializer::new(|buf: &mut [u8]| if position + buf.len() > bytes.len() {
-        Err(error::Error::simple(error::Reason::EndOfStream))
+        Err(serde::de::Error::custom("End of stream"))
     } else {
         let len = buf.len();
         buf.clone_from_slice(&bytes[position..position + len]);
@@ -81,7 +79,7 @@ pub fn from_bytes<'a, V>(bytes: &[u8]) -> Result<V, error::Error>
 }
 
 /// Serialize V into a byte buffer.
-pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
+pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, serde::de::value::Error>
     where V: serde::Serialize
 {
     let mut bytes = vec![];

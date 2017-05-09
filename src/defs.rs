@@ -7,10 +7,8 @@ use std::ops::RangeInclusive;
 
 use std::result;
 
-use error::Error;
-
-/// Define our own result type because we always use the same error type
-pub type Result<T> = result::Result<T, Error>;
+// Define our own error type because we always use the same kind of error
+pub type Result<T> = result::Result<T, ::serde::de::value::Error>;
 
 // fixint limits
 pub const FIXINT_MAX: u8 = 0b01111111;

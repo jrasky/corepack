@@ -6,14 +6,13 @@
 use collections::Vec;
 
 use serde::ser::{Serialize, SerializeSeq, SerializeTupleVariant, SerializeTuple,
-                 SerializeTupleStruct};
+                 SerializeTupleStruct, Error};
 
 use byteorder::{ByteOrder, BigEndian};
 
 use ser::Serializer;
 
 use defs::*;
-use error::*;
 
 pub struct SeqSerializer<'a, F: 'a + FnMut(&[u8]) -> Result<()>> {
     count: usize,
@@ -68,7 +67,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
 
     fn check_item_count_matches_size(&self, size: usize) -> Result<()> {
         if size != self.count {
-            Err(Error::simple(Reason::BadLength))
+            Err(Error::custom("Bad length"))
         } else {
             Ok(())
         }
@@ -109,14 +108,14 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SeqSerializer<'a, F> {
             BigEndian::write_u32(&mut buf[1..], size as u32);
             (self.output)(&buf)
         } else {
-            Err(Error::simple(Reason::TooBig))
+            Err(Error::custom("Too big"))
         }
     }
 }
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeSeq for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<()>
         where T: ?Sized + Serialize
@@ -131,7 +130,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeSeq for SeqSerializer<'a, 
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTupleVariant for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<()>
         where T: ?Sized + Serialize
@@ -146,7 +145,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTupleVariant for SeqSerial
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTupleStruct for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn serialize_field<T>(&mut self, value: &T) -> Result<()>
         where T: ?Sized + Serialize
@@ -161,7 +160,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTupleStruct for SeqSeriali
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> SerializeTuple for SeqSerializer<'a, F> {
     type Ok = ();
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn serialize_element<T>(&mut self, value: &T) -> Result<()>
         where T: ?Sized + Serialize

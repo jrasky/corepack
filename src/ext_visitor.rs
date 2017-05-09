@@ -5,10 +5,9 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use collections::Vec;
 
-use serde::de::{MapAccess, DeserializeSeed, IntoDeserializer};
+use serde::de::{MapAccess, DeserializeSeed, IntoDeserializer, Error};
 
 use defs::*;
-use error::*;
 
 pub struct ExtVisitor {
     state: u8,
@@ -27,7 +26,7 @@ impl ExtVisitor {
 }
 
 impl<'a> MapAccess<'a> for ExtVisitor {
-    type Error = Error;
+    type Error = ::serde::de::value::Error;
 
     fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>>
         where T: DeserializeSeed<'a>
@@ -52,14 +51,14 @@ impl<'a> MapAccess<'a> for ExtVisitor {
             Ok(try!(seed.deserialize(de)))
         } else if self.state == 1 {
             self.state += 1;
-            let de = self.data.as_slice().into_deserializer();
+            let de = self.data.clone().into_deserializer();
             Ok(try!(seed.deserialize(de)))
         } else {
-            Err(Error::simple(Reason::EndOfStream))
+            Err(Error::custom("End of stream"))
         }
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        (2 - self.state as usize, Some(2 - self.state as usize))
+    fn size_hint(&self) -> Option<usize> {
+        Some(2 - self.state as usize)
     }
 }

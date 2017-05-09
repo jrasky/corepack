@@ -9,10 +9,11 @@ use collections::String;
 
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
 
+use serde::de::Error;
+
 use serde;
 
 use defs::*;
-use error::*;
 use seq_serializer::*;
 use map_serializer::*;
 
@@ -115,7 +116,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
             BigEndian::write_u32(&mut buf[1..], value.len() as u32);
             try!((self.output)(&buf));
         } else {
-            return Err(Error::simple(Reason::TooBig));
+            return Err(Error::custom("Too big"));
         }
 
         (self.output)(value)
@@ -135,7 +136,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
             BigEndian::write_u32(&mut buf[1..], value.len() as u32);
             try!((self.output)(&buf));
         } else {
-            return Err(Error::simple(Reason::TooBig));
+            return Err(Error::custom("Too big"));
         }
 
         (self.output)(value.as_bytes())
@@ -145,7 +146,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
         (self.output)(&[NIL])
     }
 
-    fn serialize_variant(&mut self, variant_index: usize) -> Result<()> {
+    fn serialize_variant(&mut self, variant_index: u32) -> Result<()> {
         // Serialize variants as two-tuples with the variant index and its contents.
         // Because messagepack is purely right-associative, we don't have to track
         // the variant once we get it going.
@@ -160,7 +161,7 @@ impl<F: FnMut(&[u8]) -> Result<()>> Serializer<F> {
 
 impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Serializer<F> {
     type Ok = ();
-    type Error = Error;
+    type Error = serde::de::value::Error;
 
     type SerializeSeq = SeqSerializer<'a, F>;
     type SerializeTuple = Self::SerializeSeq;
@@ -171,7 +172,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
     type SerializeStruct = Self::SerializeMap;
     type SerializeStructVariant = Self::SerializeMap;
 
-    fn serialize_seq(self, size: Option<usize>) -> result::Result<Self::SerializeSeq, Error> {
+    fn serialize_seq(self, size: Option<usize>) -> result::Result<Self::SerializeSeq, Self::Error> {
         let mut seq = SeqSerializer::new(&mut self.output);
 
         seq.hint_size(size)?;
@@ -179,7 +180,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
         Ok(seq)
     }
 
-    fn serialize_map(self, size: Option<usize>) -> result::Result<Self::SerializeMap, Error> {
+    fn serialize_map(self, size: Option<usize>) -> result::Result<Self::SerializeMap, Self::Error> {
         let mut map = MapSerializer::new(&mut self.output);
 
         map.hint_size(size)?;
@@ -254,7 +255,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
         self.serialize_unit()
     }
 
-    fn serialize_unit_variant(self, _: &'static str, index: usize, _: &'static str) -> Result<()> {
+    fn serialize_unit_variant(self, _: &'static str, index: u32, _: &'static str) -> Result<()> {
         self.serialize_variant(index)?;
         self.serialize_unit()
     }
@@ -268,7 +269,7 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
 
     fn serialize_newtype_variant<T>(self,
                                     name: &'static str,
-                                    variant_index: usize,
+                                    variant_index: u32,
                                     _: &'static str,
                                     value: &T)
                                     -> Result<()>
@@ -288,27 +289,23 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
         value.serialize(self)
     }
 
-    fn serialize_seq_fixed_size(self, size: usize) -> result::Result<Self::SerializeSeq, Error> {
-        self.serialize_seq(Some(size))
-    }
-
-    fn serialize_tuple(self, len: usize) -> result::Result<Self::SerializeTuple, Error> {
-        self.serialize_seq_fixed_size(len)
+    fn serialize_tuple(self, len: usize) -> result::Result<Self::SerializeTuple, Self::Error> {
+        self.serialize_seq(Some(len))
     }
 
     fn serialize_tuple_struct(self,
                               _: &'static str,
                               len: usize)
-                              -> result::Result<Self::SerializeTupleStruct, Error> {
+                              -> result::Result<Self::SerializeTupleStruct, Self::Error> {
         self.serialize_tuple(len)
     }
 
     fn serialize_tuple_variant(self,
                                name: &'static str,
-                               index: usize,
+                               index: u32,
                                _: &'static str,
                                len: usize)
-                               -> result::Result<Self::SerializeTupleVariant, Error> {
+                               -> result::Result<Self::SerializeTupleVariant, Self::Error> {
         self.serialize_variant(index)?;
         self.serialize_tuple_struct(name, len)
     }
@@ -316,16 +313,16 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<()>> serde::Serializer for &'a mut Seria
     fn serialize_struct(self,
                         _: &'static str,
                         len: usize)
-                        -> result::Result<Self::SerializeStruct, Error> {
+                        -> result::Result<Self::SerializeStruct, Self::Error> {
         self.serialize_map(Some(len))
     }
 
     fn serialize_struct_variant(self,
                                 name: &'static str,
-                                index: usize,
+                                index: u32,
                                 _: &'static str,
                                 len: usize)
-                                -> result::Result<Self::SerializeStructVariant, Error> {
+                                -> result::Result<Self::SerializeStructVariant, Self::Error> {
         self.serialize_variant(index)?;
         self.serialize_struct(name, len)
     }

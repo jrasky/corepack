@@ -3,11 +3,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
-use serde::de::{DeserializeSeed, EnumAccess, Visitor, Deserialize};
+use collections::borrow::ToOwned;
+
+use serde::de::{IntoDeserializer, DeserializeSeed, EnumAccess, Visitor, Deserialize};
 
 use de::Deserializer;
 
-use error::*;
 use defs::*;
 
 pub struct VariantVisitor<'a, F: 'a + FnMut(&mut [u8]) -> Result<()>> {
@@ -26,9 +27,9 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> VariantVisitor<'a, F> {
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumAccess<'a> for VariantVisitor<'a, F> {
-    type Error = Error;
-    type Variant = VariantVisitor<'a, F>;
+impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> EnumAccess<'a> for VariantVisitor<'b, F> {
+    type Error = ::serde::de::value::Error;
+    type Variant = VariantVisitor<'b, F>;
 
     fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant)>
         where V: DeserializeSeed<'a>
@@ -39,28 +40,28 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<()>> EnumAccess<'a> for VariantVisitor<'a
 
         // the other value in this tuple would be the actual value of the enum,
         // but we don't know what that is
-        let (variant_index /* enum-value */,) = variant_index_container;
+        let (variant_index, /* enum-value */) = variant_index_container;
 
         // translate that to the name of the variant
-        let value = seed.deserialize(self.variants[variant_index].into_deserializer())?;
+        let value = seed.deserialize(self.variants[variant_index].to_owned().into_deserializer())?;
 
         Ok((value, self))
     }
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<()>> ::serde::de::VariantAccess<'a> for VariantVisitor<'a, F> {
-    type Error = Error;
+impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<()>> ::serde::de::VariantAccess<'a> for VariantVisitor<'b, F> {
+    type Error = ::serde::de::value::Error;
 
     fn tuple_variant<V>(self, _: usize, visitor: V) -> Result<V::Value>
         where V: Visitor<'a>
     {
-        ::serde::Deserializer::deserialize(self.de, visitor)
+        ::serde::Deserializer::deserialize_any(self.de, visitor)
     }
 
     fn struct_variant<V>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value>
         where V: Visitor<'a>
     {
-        ::serde::Deserializer::deserialize(self.de, visitor)
+        ::serde::Deserializer::deserialize_any(self.de, visitor)
     }
 
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value>
