@@ -12,15 +12,15 @@ use de::Deserializer;
 
 use error::Error;
 
-pub struct VariantVisitor<'a, F: 'a + FnMut(&mut [u8]) -> Result<(), Error>> {
-    de: &'a mut Deserializer<F>,
+pub struct VariantVisitor<'de: 'a, 'a, F: 'a + FnMut(usize) -> Result<&'de [u8], Error>> {
+    de: &'a mut Deserializer<'de, F>,
     variants: &'static [&'static str],
 }
 
-impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> VariantVisitor<'a, F> {
-    pub fn new(de: &'a mut Deserializer<F>,
+impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> VariantVisitor<'de, 'a, F> {
+    pub fn new(de: &'a mut Deserializer<'de, F>,
                variants: &'static [&'static str])
-               -> VariantVisitor<'a, F> {
+               -> VariantVisitor<'de, 'a, F> {
         VariantVisitor {
             de: de,
             variants: variants,
@@ -28,12 +28,12 @@ impl<'a, F: FnMut(&mut [u8]) -> Result<(), Error>> VariantVisitor<'a, F> {
     }
 }
 
-impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<(), Error>> EnumAccess<'a> for VariantVisitor<'b, F> {
+impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> EnumAccess<'de> for VariantVisitor<'de, 'a, F> {
     type Error = Error;
-    type Variant = VariantVisitor<'b, F>;
+    type Variant = VariantVisitor<'de, 'a, F>;
 
     fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant), Error>
-        where V: DeserializeSeed<'a>
+        where V: DeserializeSeed<'de>
     {
         // get the variant index with a one-item tuple
         let variant_index_container: (usize, /* enum-type */) =
@@ -52,23 +52,23 @@ impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<(), Error>> EnumAccess<'a> for Varian
     }
 }
 
-impl<'a, 'b, F: FnMut(&mut [u8]) -> Result<(), Error>> ::serde::de::VariantAccess<'a> for VariantVisitor<'b, F> {
+impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> ::serde::de::VariantAccess<'de> for VariantVisitor<'de, 'a, F> {
     type Error = Error;
 
     fn tuple_variant<V>(self, _: usize, visitor: V) -> Result<V::Value, Error>
-        where V: Visitor<'a>
+        where V: Visitor<'de>
     {
         ::serde::Deserializer::deserialize_any(self.de, visitor)
     }
 
     fn struct_variant<V>(self, _: &'static [&'static str], visitor: V) -> Result<V::Value, Error>
-        where V: Visitor<'a>
+        where V: Visitor<'de>
     {
         ::serde::Deserializer::deserialize_any(self.de, visitor)
     }
 
     fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Error>
-        where T: DeserializeSeed<'a>
+        where T: DeserializeSeed<'de>
     {
         seed.deserialize(self.de)
     }

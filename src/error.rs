@@ -7,6 +7,7 @@ use std::fmt::Display;
 
 use collections::String;
 use collections::string::{ToString, FromUtf8Error};
+use std::str::Utf8Error;
 
 use std::fmt;
 
@@ -26,7 +27,7 @@ pub enum Error {
     BadLength,
 
     /// Error decoding UTF8 string.
-    UTF8Error(FromUtf8Error),
+    Utf8Error(Utf8Error),
 
     /// Some other error that does not fit into the above.
     Other(String),
@@ -45,15 +46,15 @@ impl Error {
             &Error::EndOfStream => "End of stream",
             &Error::BadType => "Invalid type",
             &Error::BadLength => "Invalid length",
-            &Error::UTF8Error(_) => "UTF8 Error",
+            &Error::Utf8Error(_) => "UTF8 Error",
             &Error::Other(ref message) => &message,
         }
     }
 }
 
-impl From<FromUtf8Error> for Error {
-    fn from(cause: FromUtf8Error) -> Error {
-        Error::UTF8Error(cause)
+impl From<Utf8Error> for Error {
+    fn from(cause: Utf8Error) -> Error {
+        Error::Utf8Error(cause)
     }
 }
 

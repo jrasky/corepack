@@ -5,9 +5,9 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use std::result;
 
-use collections::String;
-
 use byteorder::{ByteOrder, BigEndian, LittleEndian};
+
+use serde::Serialize;
 
 use serde;
 
@@ -245,10 +245,8 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> serde::Serializer for &'a mu
     }
 
     fn serialize_char(self, v: char) -> Result<(), Error> {
-        let mut string = String::new();
-        string.push(v);
-
-        self.serialize_str(&*string)
+        let mut buf = [0; 4];
+        self.serialize_str(v.encode_utf8(&mut buf))
     }
 
     fn serialize_unit_struct(self, _: &'static str) -> Result<(), Error> {
@@ -280,13 +278,13 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> serde::Serializer for &'a mu
     }
 
     fn serialize_none(self) -> Result<(), Error> {
-        self.serialize_unit()
+        (false,).serialize(self)
     }
 
     fn serialize_some<V>(self, value: &V) -> Result<(), Self::Error>
         where V: ?Sized + serde::Serialize
     {
-        value.serialize(self)
+        (true, value).serialize(self)
     }
 
     fn serialize_tuple(self, len: usize) -> result::Result<Self::SerializeTuple, Self::Error> {
