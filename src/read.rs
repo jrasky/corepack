@@ -1,24 +1,37 @@
+//! The read trait used by the deserializer.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public License,
+// v. 2.0. If a copy of the MPL was not distributed with this file, You can
+// obtain one at https://mozilla.org/MPL/2.0/.
 use std::ops::Deref;
 
 use collections::vec::Vec;
 
 use error::Error;
 
+/// The trait used by Deserializer to read input data
 pub trait Read<'de>: private::Sealed {
-    fn input<'a>(&mut self, len: usize, scratch: &'a mut Vec<u8>) -> Result<Reference<'de, 'a>, Error>;
+    /// Reads the next len bytes of data, either by borowing or copying
+    fn input<'a>(&mut self,
+                 len: usize,
+                 scratch: &'a mut Vec<u8>)
+                 -> Result<Reference<'de, 'a>, Error>;
 }
 
+/// Data that was copied or borrowed
 pub enum Reference<'de, 'a> {
     Borrowed(&'de [u8]),
-    Copied(&'a [u8])
+    Copied(&'a [u8]),
 }
 
+/// Wrapper object around a closure that provides borrowed data
 pub struct BorrowRead<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> {
-    thunk: F
+    thunk: F,
 }
 
+/// Wrapper object around a closure that provides copied data
 pub struct CopyRead<F: FnMut(&mut [u8]) -> Result<(), Error>> {
-    thunk: F
+    thunk: F,
 }
 
 impl<'de, 'a> Deref for Reference<'de, 'a> {
@@ -27,20 +40,20 @@ impl<'de, 'a> Deref for Reference<'de, 'a> {
     fn deref(&self) -> &[u8] {
         match *self {
             Reference::Borrowed(data) => data,
-            Reference::Copied(data) => data
+            Reference::Copied(data) => data,
         }
     }
 }
 
 impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> BorrowRead<'de, F> {
     pub const fn new(thunk: F) -> BorrowRead<'de, F> {
-        BorrowRead { thunk }
+        BorrowRead { thunk: thunk }
     }
 }
 
 impl<F: FnMut(&mut [u8]) -> Result<(), Error>> CopyRead<F> {
     pub const fn new(thunk: F) -> CopyRead<F> {
-        CopyRead { thunk }
+        CopyRead { thunk: thunk }
     }
 }
 
@@ -55,7 +68,10 @@ impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> Read<'de> for BorrowRead<
 }
 
 impl<'de, F: FnMut(&mut [u8]) -> Result<(), Error>> Read<'de> for CopyRead<F> {
-    fn input<'a>(&mut self, len: usize, scratch: &'a mut Vec<u8>) -> Result<Reference<'de, 'a>, Error> {
+    fn input<'a>(&mut self,
+                 len: usize,
+                 scratch: &'a mut Vec<u8>)
+                 -> Result<Reference<'de, 'a>, Error> {
         scratch.resize(len, 0);
         (self.thunk)(scratch)?;
         Ok(Reference::Copied(scratch))
@@ -63,5 +79,6 @@ impl<'de, F: FnMut(&mut [u8]) -> Result<(), Error>> Read<'de> for CopyRead<F> {
 }
 
 mod private {
+    /// Keeps users from directly implementing the Read trait
     pub trait Sealed {}
 }

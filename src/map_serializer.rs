@@ -157,7 +157,8 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeStruct for MapSeria
     }
 }
 
-impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeStructVariant for MapSerializer<'a, F> {
+impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> SerializeStructVariant
+    for MapSerializer<'a, F> {
     type Ok = ();
     type Error = Error;
 

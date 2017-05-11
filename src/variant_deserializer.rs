@@ -5,7 +5,7 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use collections::borrow::ToOwned;
 
-use serde::de::{IntoDeserializer, DeserializeSeed, EnumAccess, Visitor, Deserialize};
+use serde::de::{IntoDeserializer, DeserializeSeed, EnumAccess, Visitor, Deserialize, VariantAccess};
 use serde::de::value::StringDeserializer;
 
 use de::Deserializer;
@@ -13,25 +13,25 @@ use de::Deserializer;
 use error::Error;
 use read::Read;
 
-pub struct VariantVisitor<'de: 'a, 'a, R: 'a + Read<'de>> {
+pub struct VariantDeserializer<'de: 'a, 'a, R: 'a + Read<'de>> {
     de: &'a mut Deserializer<'de, R>,
     variants: &'static [&'static str],
 }
 
-impl<'de, 'a, R: Read<'de>> VariantVisitor<'de, 'a, R> {
+impl<'de, 'a, R: Read<'de>> VariantDeserializer<'de, 'a, R> {
     pub fn new(de: &'a mut Deserializer<'de, R>,
                variants: &'static [&'static str])
-               -> VariantVisitor<'de, 'a, R> {
-        VariantVisitor {
+               -> VariantDeserializer<'de, 'a, R> {
+        VariantDeserializer {
             de: de,
             variants: variants,
         }
     }
 }
 
-impl<'de, 'a, R: Read<'de>> EnumAccess<'de> for VariantVisitor<'de, 'a, R> {
+impl<'de, 'a, R: Read<'de>> EnumAccess<'de> for VariantDeserializer<'de, 'a, R> {
     type Error = Error;
-    type Variant = VariantVisitor<'de, 'a, R>;
+    type Variant = VariantDeserializer<'de, 'a, R>;
 
     fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant), Error>
         where V: DeserializeSeed<'de>
@@ -42,7 +42,7 @@ impl<'de, 'a, R: Read<'de>> EnumAccess<'de> for VariantVisitor<'de, 'a, R> {
 
         // the other value in this tuple would be the actual value of the enum,
         // but we don't know what that is
-        let (variant_index, /* enum-value */) = variant_index_container;
+        let (variant_index /* enum-value */,) = variant_index_container;
 
         // translate that to the name of the variant
         let name = self.variants[variant_index].to_owned();
@@ -53,7 +53,7 @@ impl<'de, 'a, R: Read<'de>> EnumAccess<'de> for VariantVisitor<'de, 'a, R> {
     }
 }
 
-impl<'de, 'a, R: Read<'de>> ::serde::de::VariantAccess<'de> for VariantVisitor<'de, 'a, R> {
+impl<'de, 'a, R: Read<'de>> VariantAccess<'de> for VariantDeserializer<'de, 'a, R> {
     type Error = Error;
 
     fn tuple_variant<V>(self, _: usize, visitor: V) -> Result<V::Value, Error>

@@ -15,9 +15,9 @@ use serde::Deserialize;
 
 use serde;
 
-use seq_visitor::*;
-use ext_visitor::*;
-use variant_visitor::*;
+use seq_deserializer::*;
+use ext_deserializer::*;
+use variant_deserializer::*;
 
 use defs::*;
 use error::Error;
@@ -28,16 +28,16 @@ use read::{Read, Reference};
 pub struct Deserializer<'de, R: Read<'de>> {
     read: R,
     scratch: Vec<u8>,
-    phantom: PhantomData<&'de u8>
+    phantom: PhantomData<&'de u8>,
 }
 
 impl<'de, R: Read<'de>> Deserializer<'de, R> {
     /// Create a new Deserializer given an input function.
     pub fn new(read: R) -> Deserializer<'de, R> {
         Deserializer {
-            read,
+            read: read,
             scratch: vec![],
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 
@@ -53,8 +53,12 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
         where V: serde::de::Visitor<'de>
     {
         match reference {
-            Reference::Borrowed(buf) => visitor.visit_borrowed_str(str::from_utf8(buf).map_err(|e| Into::<Error>::into(e))?),
-            Reference::Copied(buf) => visitor.visit_str(str::from_utf8(buf).map_err(|e| Into::<Error>::into(e))?)
+            Reference::Borrowed(buf) => {
+                visitor.visit_borrowed_str(str::from_utf8(buf).map_err(|e| Into::<Error>::into(e))?)
+            }
+            Reference::Copied(buf) => {
+                visitor.visit_str(str::from_utf8(buf).map_err(|e| Into::<Error>::into(e))?)
+            }
         }
     }
 
@@ -64,7 +68,7 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
     {
         match reference {
             Reference::Borrowed(buf) => visitor.visit_borrowed_bytes(buf),
-            Reference::Copied(buf) => visitor.visit_bytes(buf)
+            Reference::Copied(buf) => visitor.visit_bytes(buf),
         }
     }
 
@@ -76,11 +80,11 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
             v if NEG_FIXINT.contains(v) => visitor.visit_i8(read_signed(v)),
             v if FIXMAP.contains(v) => {
                 let size = (v & !FIXMAP_MASK) as usize * 2;
-                visitor.visit_map(SeqVisitor::new(self, size))
+                visitor.visit_map(SeqDeserializer::new(self, size))
             }
             v if FIXARRAY.contains(v) => {
                 let size = (v & !FIXARRAY_MASK) as usize;
-                visitor.visit_seq(SeqVisitor::new(self, size))
+                visitor.visit_seq(SeqDeserializer::new(self, size))
             }
             v if FIXSTR.contains(v) => {
                 let reference = self.input((v & !FIXSTR_MASK) as usize)?;
@@ -114,7 +118,7 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(size)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             EXT16 => {
                 let size = BigEndian::read_u16(&self.input(U16_BYTES)?) as usize;
@@ -122,7 +126,7 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(size)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             EXT32 => {
                 let size = BigEndian::read_u32(&self.input(U32_BYTES)?) as usize;
@@ -130,7 +134,7 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(size)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             UINT8 => {
                 let buf = self.input(1)?;
@@ -168,31 +172,31 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(1)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             FIXEXT2 => {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(2)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             FIXEXT4 => {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(4)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             FIXEXT8 => {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(8)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             FIXEXT16 => {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
                 let buf = self.input(16)?;
-                visitor.visit_map(ExtVisitor::new(ty, &buf))
+                visitor.visit_map(ExtDeserializer::new(ty, &buf))
             }
             STR8 => {
                 let size = self.input(1)?[0] as usize;
@@ -215,22 +219,22 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
             ARRAY16 => {
                 let size = BigEndian::read_u16(&self.input(U16_BYTES)?);
 
-                visitor.visit_seq(SeqVisitor::new(self, size as usize))
+                visitor.visit_seq(SeqDeserializer::new(self, size as usize))
             }
             ARRAY32 => {
                 let size = BigEndian::read_u32(&self.input(U32_BYTES)?);
 
-                visitor.visit_seq(SeqVisitor::new(self, size as usize))
+                visitor.visit_seq(SeqDeserializer::new(self, size as usize))
             }
             MAP16 => {
                 let size = BigEndian::read_u16(&self.input(U16_BYTES)?);
 
-                visitor.visit_map(SeqVisitor::new(self, size as usize * 2))
+                visitor.visit_map(SeqDeserializer::new(self, size as usize * 2))
             }
             MAP32 => {
                 let size = BigEndian::read_u32(&self.input(U32_BYTES)?);
 
-                visitor.visit_map(SeqVisitor::new(self, size as usize * 2))
+                visitor.visit_map(SeqDeserializer::new(self, size as usize * 2))
             }
             _ => Err(Error::BadType),
         }
@@ -342,7 +346,7 @@ impl<'de, 'a, R: Read<'de>> serde::Deserializer<'de> for &'a mut Deserializer<'d
         where V: serde::de::Visitor<'de>
     {
         // hack below
-        let (is_some, /* maybe value */) = Deserialize::deserialize(&mut *self)?;
+        let (is_some /* maybe value */,) = Deserialize::deserialize(&mut *self)?;
 
         if is_some {
             // This works because there are no terminating sequences for tuples or the like
@@ -422,7 +426,7 @@ impl<'de, 'a, R: Read<'de>> serde::Deserializer<'de> for &'a mut Deserializer<'d
                            -> Result<V::Value, Error>
         where V: serde::de::Visitor<'de>
     {
-        visitor.visit_enum(VariantVisitor::new(self, variants))
+        visitor.visit_enum(VariantDeserializer::new(self, variants))
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Error>
@@ -431,7 +435,7 @@ impl<'de, 'a, R: Read<'de>> serde::Deserializer<'de> for &'a mut Deserializer<'d
         self.deserialize_any(visitor)
     }
 
-    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Error> 
+    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'de>
     {
         self.deserialize_any(visitor)

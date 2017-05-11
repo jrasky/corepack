@@ -3,21 +3,21 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
-use serde::de::{MapAccess, DeserializeSeed};
+use serde::de::{SeqAccess, MapAccess, DeserializeSeed};
 
 use de::Deserializer;
 
 use error::Error;
 use read::Read;
 
-pub struct SeqVisitor<'de: 'a, 'a, R: 'a + Read<'de>> {
+pub struct SeqDeserializer<'de: 'a, 'a, R: 'a + Read<'de>> {
     de: &'a mut Deserializer<'de, R>,
     count: usize,
 }
 
-impl<'de, 'a, R: Read<'de>> SeqVisitor<'de, 'a, R> {
-    pub fn new(de: &'a mut Deserializer<'de, R>, count: usize) -> SeqVisitor<'de, 'a, R> {
-        SeqVisitor {
+impl<'de, 'a, R: Read<'de>> SeqDeserializer<'de, 'a, R> {
+    pub fn new(de: &'a mut Deserializer<'de, R>, count: usize) -> SeqDeserializer<'de, 'a, R> {
+        SeqDeserializer {
             de: de,
             count: count,
         }
@@ -36,7 +36,7 @@ impl<'de, 'a, R: Read<'de>> SeqVisitor<'de, 'a, R> {
     }
 }
 
-impl<'de, 'a, R: Read<'de>> ::serde::de::SeqAccess<'de> for SeqVisitor<'de, 'a, R> {
+impl<'de, 'a, R: Read<'de>> SeqAccess<'de> for SeqDeserializer<'de, 'a, R> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
@@ -50,7 +50,7 @@ impl<'de, 'a, R: Read<'de>> ::serde::de::SeqAccess<'de> for SeqVisitor<'de, 'a, 
     }
 }
 
-impl<'de, 'a, R: Read<'de>> MapAccess<'de> for SeqVisitor<'de, 'a, R> {
+impl<'de, 'a, R: Read<'de>> MapAccess<'de> for SeqDeserializer<'de, 'a, R> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Error>

@@ -67,7 +67,7 @@ impl ::std::error::Error for Error {
     fn cause(&self) -> Option<&::std::error::Error> {
         match self {
             &Error::UTF8Error(ref cause) => Some(cause),
-            _ => None
+            _ => None,
         }
     }
 }

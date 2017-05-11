@@ -10,15 +10,15 @@ use serde::de::value::{StrDeserializer, I8Deserializer, SeqDeserializer};
 
 use error::Error;
 
-pub struct ExtVisitor<'a> {
+pub struct ExtDeserializer<'a> {
     state: u8,
     ty: i8,
-    data: &'a [u8]
+    data: &'a [u8],
 }
 
-impl<'a> ExtVisitor<'a> {
-    pub fn new(ty: i8, data: &'a [u8]) -> ExtVisitor<'a> {
-        ExtVisitor {
+impl<'a> ExtDeserializer<'a> {
+    pub fn new(ty: i8, data: &'a [u8]) -> ExtDeserializer<'a> {
+        ExtDeserializer {
             state: 0,
             ty: ty,
             data: data,
@@ -26,7 +26,7 @@ impl<'a> ExtVisitor<'a> {
     }
 }
 
-impl<'de, 'a> MapAccess<'de> for ExtVisitor<'a> {
+impl<'de, 'a> MapAccess<'de> for ExtDeserializer<'a> {
     type Error = Error;
 
     fn next_key_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>

@@ -36,9 +36,9 @@ pub mod read;
 mod defs;
 mod seq_serializer;
 mod map_serializer;
-mod variant_visitor;
-mod ext_visitor;
-mod seq_visitor;
+mod variant_deserializer;
+mod ext_deserializer;
+mod seq_deserializer;
 
 mod ser;
 mod de;
@@ -69,7 +69,8 @@ pub fn from_bytes<'a, V>(bytes: &'a [u8]) -> Result<V, error::Error>
 {
     let mut position: usize = 0;
 
-    let mut de = Deserializer::new(read::BorrowRead::new(|len: usize| if position + len > bytes.len() {
+    let mut de = Deserializer::new(read::BorrowRead::new(|len: usize| if position + len >
+                                                                         bytes.len() {
         Err(error::Error::EndOfStream)
     } else {
         let result = &bytes[position..position + len];

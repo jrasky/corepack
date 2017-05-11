@@ -253,7 +253,11 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> serde::Serializer for &'a mu
         self.serialize_unit()
     }
 
-    fn serialize_unit_variant(self, _: &'static str, index: u32, _: &'static str) -> Result<(), Error> {
+    fn serialize_unit_variant(self,
+                              _: &'static str,
+                              index: u32,
+                              _: &'static str)
+                              -> Result<(), Error> {
         self.serialize_variant(index)?;
         self.serialize_unit()
     }
