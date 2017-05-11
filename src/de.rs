@@ -3,7 +3,9 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
-use collections::String;
+use collections::{String, Vec};
+
+use std::marker::PhantomData;
 
 use std::str;
 
@@ -19,24 +21,51 @@ use variant_visitor::*;
 
 use defs::*;
 use error::Error;
+use read::{Read, Reference};
 
 /// The corepack Deserializer struct. Contains a closure that should produce
 /// the next slice of data of the given length
-pub struct Deserializer<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> {
-    input: F
+pub struct Deserializer<'de, R: Read<'de>> {
+    read: R,
+    scratch: Vec<u8>,
+    phantom: PhantomData<&'de u8>
 }
 
-impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> Deserializer<'de, F> {
+impl<'de, R: Read<'de>> Deserializer<'de, R> {
     /// Create a new Deserializer given an input function.
-    pub const fn new(input: F) -> Deserializer<'de, F> {
-        Deserializer { input: input }
+    pub fn new(read: R) -> Deserializer<'de, R> {
+        Deserializer {
+            read,
+            scratch: vec![],
+            phantom: PhantomData
+        }
     }
 
     #[inline]
-    fn input(&mut self, len: usize) -> Result<&'de [u8], Error> {
-        let result = (self.input)(len)?;
+    fn input<'a>(&'a mut self, len: usize) -> Result<Reference<'de, 'a>, Error> {
+        let result = self.read.input(len, &mut self.scratch)?;
         debug_assert!(result.len() == len);
         Ok(result)
+    }
+
+    #[inline]
+    fn parse_str<'a, V>(reference: Reference<'de, 'a>, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor<'de>
+    {
+        match reference {
+            Reference::Borrowed(buf) => visitor.visit_borrowed_str(str::from_utf8(buf).map_err(|e| Into::<Error>::into(e))?),
+            Reference::Copied(buf) => visitor.visit_str(str::from_utf8(buf).map_err(|e| Into::<Error>::into(e))?)
+        }
+    }
+
+    #[inline]
+    fn parse_bytes<'a, V>(reference: Reference<'de, 'a>, visitor: V) -> Result<V::Value, Error>
+        where V: serde::de::Visitor<'de>
+    {
+        match reference {
+            Reference::Borrowed(buf) => visitor.visit_borrowed_bytes(buf),
+            Reference::Copied(buf) => visitor.visit_bytes(buf)
+        }
     }
 
     fn parse_as<V>(&mut self, visitor: V, ty: u8) -> Result<V::Value, Error>
@@ -44,7 +73,7 @@ impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> Deserializer<'de, F> {
     {
         match ty {
             v if POS_FIXINT.contains(v) => visitor.visit_u8(v),
-            v if NEG_FIXINT.contains(v) => visitor.visit_i8(LittleEndian::read_i16(&[v, 0]) as i8),
+            v if NEG_FIXINT.contains(v) => visitor.visit_i8(read_signed(v)),
             v if FIXMAP.contains(v) => {
                 let size = (v & !FIXMAP_MASK) as usize * 2;
                 visitor.visit_map(SeqVisitor::new(self, size))
@@ -54,161 +83,153 @@ impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> Deserializer<'de, F> {
                 visitor.visit_seq(SeqVisitor::new(self, size))
             }
             v if FIXSTR.contains(v) => {
-                let mut buf = self.input((v & !FIXSTR_MASK) as usize)?;
-                visitor.visit_borrowed_str(str::from_utf8(buf)
-                    .map_err(|e| Into::<Error>::into(e))?)
+                let reference = self.input((v & !FIXSTR_MASK) as usize)?;
+
+                Deserializer::<'de, R>::parse_str(reference, visitor)
             }
             NIL => visitor.visit_unit(),
             FALSE => visitor.visit_bool(false),
             TRUE => visitor.visit_bool(true),
             BIN8 => {
-                let mut buf = self.input(1)?;
-                let mut buf = self.input(buf[0] as usize)?;
-                visitor.visit_borrowed_bytes(buf)
+                let size = self.input(1)?[0];
+                let reference = self.input(size as usize)?;
+
+                Deserializer::<'de, R>::parse_bytes(reference, visitor)
             }
             BIN16 => {
-                let mut buf = self.input(U16_BYTES)?;
-                let mut buf = self.input(BigEndian::read_u16(&buf) as usize)?;
-                visitor.visit_borrowed_bytes(buf)
+                let size = BigEndian::read_u16(&self.input(U16_BYTES)?) as usize;
+                let reference = self.input(size)?;
+
+                Deserializer::<'de, R>::parse_bytes(reference, visitor)
             }
             BIN32 => {
-                let mut buf = self.input(U32_BYTES)?;
-                let mut buf = self.input(BigEndian::read_u32(&buf) as usize)?;
-                visitor.visit_borrowed_bytes(buf)
+                let size = BigEndian::read_u32(&self.input(U32_BYTES)?) as usize;
+                let reference = self.input(size)?;
+
+                Deserializer::<'de, R>::parse_bytes(reference, visitor)
             }
             EXT8 => {
-                let mut buf = self.input(1)?;
-                let size = buf[0] as usize;
+                let size = self.input(1)?[0] as usize;
 
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(size)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(size)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             EXT16 => {
-                let mut buf = self.input(U16_BYTES)?;
-                let size = BigEndian::read_u16(&buf) as usize;
+                let size = BigEndian::read_u16(&self.input(U16_BYTES)?) as usize;
 
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(size)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(size)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             EXT32 => {
-                let mut buf = self.input(U32_BYTES)?;
-                let size = BigEndian::read_u32(&buf) as usize;
+                let size = BigEndian::read_u32(&self.input(U32_BYTES)?) as usize;
 
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(size)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(size)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             UINT8 => {
-                let mut buf = self.input(1)?;
+                let buf = self.input(1)?;
                 visitor.visit_u8(buf[0])
             }
             UINT16 => {
-                let mut buf = self.input(U16_BYTES)?;
+                let buf = self.input(U16_BYTES)?;
                 visitor.visit_u16(BigEndian::read_u16(&buf))
             }
             UINT32 => {
-                let mut buf = self.input(U32_BYTES)?;
+                let buf = self.input(U32_BYTES)?;
                 visitor.visit_u32(BigEndian::read_u32(&buf))
             }
             UINT64 => {
-                let mut buf = self.input(U64_BYTES)?;
+                let buf = self.input(U64_BYTES)?;
                 visitor.visit_u64(BigEndian::read_u64(&buf))
             }
             INT8 => {
-                let mut buf = self.input(1)?;
-                visitor.visit_i8(LittleEndian::read_i16(&[buf[0], 0]) as i8)
+                let buf = self.input(1)?;
+                visitor.visit_i8(read_signed(buf[0]))
             }
             INT16 => {
-                let mut buf = self.input(U16_BYTES)?;
+                let buf = self.input(U16_BYTES)?;
                 visitor.visit_i16(BigEndian::read_i16(&buf))
             }
             INT32 => {
-                let mut buf = self.input(U32_BYTES)?;
+                let buf = self.input(U32_BYTES)?;
                 visitor.visit_i32(BigEndian::read_i32(&buf))
             }
             INT64 => {
-                let mut buf = self.input(U64_BYTES)?;
+                let buf = self.input(U64_BYTES)?;
                 visitor.visit_i64(BigEndian::read_i64(&buf))
             }
             FIXEXT1 => {
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(1)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(1)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             FIXEXT2 => {
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(2)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(2)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             FIXEXT4 => {
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(4)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(4)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             FIXEXT8 => {
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(8)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(8)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             FIXEXT16 => {
-                let mut buf = self.input(1)?;
-                let ty: i8 = LittleEndian::read_i16(&[buf[0], 0]) as i8;
+                let ty: i8 = read_signed(self.input(1)?[0]);
 
-                let mut buf = self.input(16)?;
-                visitor.visit_map(ExtVisitor::new(ty, buf))
+                let buf = self.input(16)?;
+                visitor.visit_map(ExtVisitor::new(ty, &buf))
             }
             STR8 => {
-                let mut buf = self.input(1)?;
-                let mut buf = self.input(buf[0] as usize)?;
-                visitor.visit_borrowed_str(str::from_utf8(buf)
-                    .map_err(|e| Into::<Error>::into(e))?)
+                let size = self.input(1)?[0] as usize;
+
+                let buf = self.input(size)?;
+                Deserializer::<'de, R>::parse_str(buf, visitor)
             }
             STR16 => {
-                let mut buf = self.input(U16_BYTES)?;
-                let mut buf = self.input(BigEndian::read_u16(&buf) as usize)?;
-                visitor.visit_borrowed_str(str::from_utf8(buf)
-                    .map_err(|e| Into::<Error>::into(e))?)
+                let size = BigEndian::read_u16(&self.input(U16_BYTES)?) as usize;
+
+                let buf = self.input(size)?;
+                Deserializer::<'de, R>::parse_str(buf, visitor)
             }
             STR32 => {
-                let mut buf = self.input(U32_BYTES)?;
-                let mut buf = self.input(BigEndian::read_u32(&buf) as usize)?;
-                visitor.visit_borrowed_str(str::from_utf8(buf)
-                    .map_err(|e| Into::<Error>::into(e))?)
+                let size = BigEndian::read_u16(&self.input(U32_BYTES)?) as usize;
+
+                let buf = self.input(size)?;
+                Deserializer::<'de, R>::parse_str(buf, visitor)
             }
             ARRAY16 => {
-                let mut buf = self.input(U16_BYTES)?;
-                let size = BigEndian::read_u16(&buf);
+                let size = BigEndian::read_u16(&self.input(U16_BYTES)?);
+
                 visitor.visit_seq(SeqVisitor::new(self, size as usize))
             }
             ARRAY32 => {
-                let mut buf = self.input(U32_BYTES)?;
-                let size = BigEndian::read_u32(&buf);
+                let size = BigEndian::read_u32(&self.input(U32_BYTES)?);
+
                 visitor.visit_seq(SeqVisitor::new(self, size as usize))
             }
             MAP16 => {
-                let mut buf = self.input(U16_BYTES)?;
-                let size = BigEndian::read_u16(&buf);
+                let size = BigEndian::read_u16(&self.input(U16_BYTES)?);
+
                 visitor.visit_map(SeqVisitor::new(self, size as usize * 2))
             }
             MAP32 => {
-                let mut buf = self.input(U16_BYTES)?;
-                let size = BigEndian::read_u32(&buf);
+                let size = BigEndian::read_u32(&self.input(U32_BYTES)?);
+
                 visitor.visit_map(SeqVisitor::new(self, size as usize * 2))
             }
             _ => Err(Error::BadType),
@@ -216,14 +237,15 @@ impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> Deserializer<'de, F> {
     }
 }
 
-impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> serde::Deserializer<'de> for &'a mut Deserializer<'de, F> {
+impl<'de, 'a, R: Read<'de>> serde::Deserializer<'de> for &'a mut Deserializer<'de, R> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Error>
         where V: serde::de::Visitor<'de>
     {
-        let buf = self.input(1)?;
-        self.parse_as(visitor, buf[0])
+        let ty = self.input(1)?[0];
+
+        self.parse_as(visitor, ty)
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Error>

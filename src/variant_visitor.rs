@@ -11,16 +11,17 @@ use serde::de::value::StringDeserializer;
 use de::Deserializer;
 
 use error::Error;
+use read::Read;
 
-pub struct VariantVisitor<'de: 'a, 'a, F: 'a + FnMut(usize) -> Result<&'de [u8], Error>> {
-    de: &'a mut Deserializer<'de, F>,
+pub struct VariantVisitor<'de: 'a, 'a, R: 'a + Read<'de>> {
+    de: &'a mut Deserializer<'de, R>,
     variants: &'static [&'static str],
 }
 
-impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> VariantVisitor<'de, 'a, F> {
-    pub fn new(de: &'a mut Deserializer<'de, F>,
+impl<'de, 'a, R: Read<'de>> VariantVisitor<'de, 'a, R> {
+    pub fn new(de: &'a mut Deserializer<'de, R>,
                variants: &'static [&'static str])
-               -> VariantVisitor<'de, 'a, F> {
+               -> VariantVisitor<'de, 'a, R> {
         VariantVisitor {
             de: de,
             variants: variants,
@@ -28,9 +29,9 @@ impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> VariantVisitor<'de, '
     }
 }
 
-impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> EnumAccess<'de> for VariantVisitor<'de, 'a, F> {
+impl<'de, 'a, R: Read<'de>> EnumAccess<'de> for VariantVisitor<'de, 'a, R> {
     type Error = Error;
-    type Variant = VariantVisitor<'de, 'a, F>;
+    type Variant = VariantVisitor<'de, 'a, R>;
 
     fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant), Error>
         where V: DeserializeSeed<'de>
@@ -52,7 +53,7 @@ impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> EnumAccess<'de> for V
     }
 }
 
-impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> ::serde::de::VariantAccess<'de> for VariantVisitor<'de, 'a, F> {
+impl<'de, 'a, R: Read<'de>> ::serde::de::VariantAccess<'de> for VariantVisitor<'de, 'a, R> {
     type Error = Error;
 
     fn tuple_variant<V>(self, _: usize, visitor: V) -> Result<V::Value, Error>

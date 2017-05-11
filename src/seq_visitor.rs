@@ -8,14 +8,15 @@ use serde::de::{MapAccess, DeserializeSeed};
 use de::Deserializer;
 
 use error::Error;
+use read::Read;
 
-pub struct SeqVisitor<'de: 'a, 'a, F: 'a + FnMut(usize) -> Result<&'de [u8], Error>> {
-    de: &'a mut Deserializer<'de, F>,
+pub struct SeqVisitor<'de: 'a, 'a, R: 'a + Read<'de>> {
+    de: &'a mut Deserializer<'de, R>,
     count: usize,
 }
 
-impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> SeqVisitor<'de, 'a, F> {
-    pub fn new(de: &'a mut Deserializer<'de, F>, count: usize) -> SeqVisitor<'de, 'a, F> {
+impl<'de, 'a, R: Read<'de>> SeqVisitor<'de, 'a, R> {
+    pub fn new(de: &'a mut Deserializer<'de, R>, count: usize) -> SeqVisitor<'de, 'a, R> {
         SeqVisitor {
             de: de,
             count: count,
@@ -35,7 +36,7 @@ impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> SeqVisitor<'de, 'a, F
     }
 }
 
-impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> ::serde::de::SeqAccess<'de> for SeqVisitor<'de, 'a, F> {
+impl<'de, 'a, R: Read<'de>> ::serde::de::SeqAccess<'de> for SeqVisitor<'de, 'a, R> {
     type Error = Error;
 
     fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Error>
@@ -49,7 +50,7 @@ impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> ::serde::de::SeqAcces
     }
 }
 
-impl<'de, 'a, F: FnMut(usize) -> Result<&'de [u8], Error>> MapAccess<'de> for SeqVisitor<'de, 'a, F> {
+impl<'de, 'a, R: Read<'de>> MapAccess<'de> for SeqVisitor<'de, 'a, R> {
     type Error = Error;
 
     fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Error>

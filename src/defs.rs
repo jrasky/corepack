@@ -5,6 +5,8 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use std::ops::RangeInclusive;
 
+use byteorder::{LittleEndian, ByteOrder};
+
 // fixint limits
 pub const FIXINT_MAX: u8 = 0b01111111;
 pub const FIXINT_MIN: i8 = 0b11100000;
@@ -80,3 +82,7 @@ pub const FIXSTR_MASK: u8 = 0b1010_0000;
 pub const U64_BYTES: usize = 8;
 pub const U32_BYTES: usize = 4;
 pub const U16_BYTES: usize = 2;
+
+pub fn read_signed(unsigned: u8) -> i8 {
+    LittleEndian::read_i16(&[unsigned, 0]) as i8
+}

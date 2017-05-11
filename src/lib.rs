@@ -31,6 +31,7 @@ pub use ser::Serializer;
 pub use de::Deserializer;
 
 pub mod error;
+pub mod read;
 
 mod defs;
 mod seq_serializer;
@@ -47,12 +48,8 @@ pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
     where I: Iterator<Item = u8>,
           V: serde::de::DeserializeOwned
 {
-    let mut buf = vec![];
-
-    let mut de = Deserializer::new(|len: usize| {
-        buf.resize(len, 0);
-        
-        for i in 0..len {
+    let mut de = Deserializer::new(read::CopyRead::new(|buf: &mut [u8]| {
+        for i in 0..buf.len() {
             if let Some(byte) = iter.next() {
                 buf[i] = byte;
             } else {
@@ -60,9 +57,8 @@ pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
             }
         }
 
-        // TODO: might have to write out a separate code path for when Deserialize needs to copy
-        Ok(buf.as_slice())
-    });
+        Ok(())
+    }));
 
     V::deserialize(&mut de)
 }
@@ -73,11 +69,11 @@ pub fn from_bytes<'a, V>(bytes: &'a [u8]) -> Result<V, error::Error>
 {
     let mut position: usize = 0;
 
-    let mut de = Deserializer::new(|len: usize| if position + len > bytes.len() {
+    let mut de = Deserializer::new(read::BorrowRead::new(|len: usize| if position + len > bytes.len() {
         Err(error::Error::EndOfStream)
     } else {
         Ok(&bytes[position..position + len])
-    });
+    }));
 
     V::deserialize(&mut de)
 }
@@ -113,8 +109,8 @@ mod test {
         D { a: isize, b: String },
     }
 
-    fn test_through<'a, T>(expected: T)
-        where T: Serialize + Deserialize<'a> + PartialEq + Debug
+    fn test_through<T>(expected: T)
+        where for<'a> T: Serialize + Deserialize<'a> + PartialEq + Debug
     {
         let x = ::to_bytes(&expected).expect("Failed to serialize");
 
