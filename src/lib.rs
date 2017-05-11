@@ -102,7 +102,8 @@ pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
 
 #[cfg(test)]
 mod test {
-    use serde::{Serialize, Deserialize};
+    use serde::Serialize;
+    use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 
     #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -114,7 +115,7 @@ mod test {
     }
 
     fn test_through<T>(expected: T)
-        where for<'a> T: Serialize + Deserialize<'a> + PartialEq + Debug
+        where T: Serialize + DeserializeOwned + PartialEq + Debug
     {
         let x = ::to_bytes(&expected).expect("Failed to serialize");
 
