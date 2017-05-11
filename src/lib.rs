@@ -72,7 +72,11 @@ pub fn from_bytes<'a, V>(bytes: &'a [u8]) -> Result<V, error::Error>
     let mut de = Deserializer::new(read::BorrowRead::new(|len: usize| if position + len > bytes.len() {
         Err(error::Error::EndOfStream)
     } else {
-        Ok(&bytes[position..position + len])
+        let result = &bytes[position..position + len];
+
+        position += len;
+
+        Ok(result)
     }));
 
     V::deserialize(&mut de)

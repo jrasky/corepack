@@ -49,7 +49,7 @@ impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> private::Sealed for Borro
 impl<F: FnMut(&mut [u8]) -> Result<(), Error>> private::Sealed for CopyRead<F> {}
 
 impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> Read<'de> for BorrowRead<'de, F> {
-    fn input<'a>(&mut self, len: usize, scratch: &'a mut Vec<u8>) -> Result<Reference<'de, 'a>, Error> {
+    fn input<'a>(&mut self, len: usize, _: &'a mut Vec<u8>) -> Result<Reference<'de, 'a>, Error> {
         Ok(Reference::Borrowed((self.thunk)(len)?))
     }
 }

@@ -6,7 +6,7 @@
 use std::fmt::Display;
 
 use collections::String;
-use collections::string::{ToString, FromUtf8Error};
+use collections::string::ToString;
 use std::str::Utf8Error;
 
 use std::fmt;

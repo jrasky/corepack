@@ -10,10 +10,11 @@ keywords = ["messagepack", "binary", "encoding", "serialize"]
 license = "MPL-2.0"
 
 [dependencies]
-serde = { version = "~1.0.2", default-features = false, features = ["collections"] }
+serde = { version = "~1.0.3", default-features = false, features = ["collections"] }
 byteorder = { version = "~1.0", default-features = false }
-#[dev-dependencies]
-serde_derive = "~1.0.2"
+
+[dev-dependencies]
+serde_derive = "~1.0.3"
 
 [features]
 default = []
