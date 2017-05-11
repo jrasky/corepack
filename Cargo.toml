@@ -17,6 +17,6 @@ byteorder = { version = "~1.0", default-features = false }
 serde_derive = "~1.0.3"
 
 [features]
-default = []
+default = ["std"]
 
 std = ["serde/std"]

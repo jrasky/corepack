@@ -1,5 +1,5 @@
 # corepack
-A no_std support for messagepack in serde
+A better messagepack implementation for serde
 
 [Documentation](https://docs.rs/corepack)
 
@@ -10,8 +10,8 @@ To use:
 corepack = "~0.2.0"
 ```
 
-Note: if you want to use corepack with a `std` serde, enable the `std` feature.
+If you want to use corepack in a `no_std` environment, disable the "std" feature:
 
 ```toml
-corepack = { version = "~0.2.0", features = ["std"] }
+corepack = { version = "~0.2.0", default-features = false }
 ```

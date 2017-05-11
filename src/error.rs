@@ -61,12 +61,12 @@ impl From<Utf8Error> for Error {
 #[cfg(feature = "std")]
 impl ::std::error::Error for Error {
     fn description(&self) -> &str {
-        Error::description()
+        Error::description(self)
     }
 
     fn cause(&self) -> Option<&::std::error::Error> {
         match self {
-            &Error::UTF8Error(ref cause) => Some(cause),
+            &Error::Utf8Error(ref cause) => Some(cause),
             _ => None,
         }
     }

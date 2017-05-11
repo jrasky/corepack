@@ -12,7 +12,7 @@
 #![feature(const_fn)]
 #![feature(box_syntax)]
 #![allow(overflowing_literals)]
-// always test with libstd turned on
+// testing requires std to be available
 #![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
 #[cfg(all(not(feature = "std"), not(test)))]
 extern crate core as std;
