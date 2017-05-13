@@ -24,7 +24,7 @@ pub struct Serializer<F: FnMut(&[u8]) -> Result<(), Error>> {
 
 impl<F: FnMut(&[u8]) -> Result<(), Error>> Serializer<F> {
     /// Create a new Deserializer given an input function.
-    pub const fn new(output: F) -> Serializer<F> {
+    pub fn new(output: F) -> Serializer<F> {
         Serializer { output: output }
     }
 
@@ -332,8 +332,12 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> serde::Serializer for &'a mu
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "collections")]
     use collections::{Vec, String};
+    #[cfg(feature = "collections")]
     use collections::btree_map::BTreeMap;
+    #[cfg(feature = "std")]
+    use std::collections::BTreeMap;
 
     #[test]
     fn positive_fixint_test() {

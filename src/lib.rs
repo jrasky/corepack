@@ -3,15 +3,11 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
-#![feature(inclusive_range)]
-#![feature(inclusive_range_syntax)]
-#![feature(unboxed_closures)]
-#![feature(collections)]
-#![feature(alloc)]
-#![feature(range_contains)]
-#![feature(const_fn)]
-#![feature(box_syntax)]
+
+#![cfg_attr(feature = "collections", feature(collections))]
+#![cfg_attr(feature = "alloc", feature(alloc))]
 #![allow(overflowing_literals)]
+
 // testing requires std to be available
 #![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
 #[cfg(all(not(feature = "std"), not(test)))]
@@ -21,10 +17,15 @@ extern crate byteorder;
 #[cfg(test)]
 #[macro_use]
 extern crate serde_derive;
+
+#[cfg(feature = "collections")]
 #[macro_use]
 extern crate collections;
+
+#[cfg(feature = "alloc")]
 extern crate alloc;
 
+#[cfg(feature = "collections")]
 use collections::Vec;
 
 pub use ser::Serializer;
