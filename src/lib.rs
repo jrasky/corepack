@@ -5,7 +5,7 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 
 #![cfg_attr(feature = "collections", feature(collections))]
-#![cfg_attr(feature = "alloc", feature(alloc))]
+#![cfg_attr(feature = "collections", feature(alloc))]
 #![allow(overflowing_literals)]
 
 // testing requires std to be available
@@ -22,7 +22,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate collections;
 
-#[cfg(feature = "alloc")]
+#[cfg(feature = "collections")]
 extern crate alloc;
 
 #[cfg(feature = "collections")]
