@@ -445,11 +445,6 @@ impl<'de, 'a, R: Read<'de>> serde::Deserializer<'de> for &'a mut Deserializer<'d
 
 #[cfg(test)]
 mod test {
-    #[cfg(feature = "collections")]
-    use collections::{String, Vec};
-    #[cfg(feature = "collections")]
-    use collections::btree_map::BTreeMap;
-    #[cfg(feature = "std")]
     use std::collections::BTreeMap;
 
     #[test]

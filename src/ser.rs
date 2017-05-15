@@ -332,11 +332,6 @@ impl<'a, F: 'a + FnMut(&[u8]) -> Result<(), Error>> serde::Serializer for &'a mu
 
 #[cfg(test)]
 mod test {
-    #[cfg(feature = "collections")]
-    use collections::{Vec, String};
-    #[cfg(feature = "collections")]
-    use collections::btree_map::BTreeMap;
-    #[cfg(feature = "std")]
     use std::collections::BTreeMap;
 
     #[test]
