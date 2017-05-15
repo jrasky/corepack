@@ -4,80 +4,90 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
 
-#![feature(inclusive_range)]
-#![feature(inclusive_range_syntax)]
-#![feature(fn_traits)]
-#![feature(unboxed_closures)]
-#![feature(collections)]
-#![feature(alloc)]
-#![feature(range_contains)]
-#![feature(const_fn)]
-#![feature(box_syntax)]
+#![cfg_attr(feature = "collections", feature(collections))]
+#![cfg_attr(feature = "collections", feature(alloc))]
 #![allow(overflowing_literals)]
-// always test with libstd turned on
+
+// testing requires std to be available
 #![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
 #[cfg(all(not(feature = "std"), not(test)))]
 extern crate core as std;
 extern crate serde;
 extern crate byteorder;
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
+
+#[cfg(feature = "collections")]
 #[macro_use]
 extern crate collections;
+
+#[cfg(feature = "collections")]
 extern crate alloc;
 
+#[cfg(feature = "collections")]
 use collections::Vec;
 
 pub use ser::Serializer;
 pub use de::Deserializer;
 
 pub mod error;
+pub mod read;
 
 mod defs;
+mod seq_serializer;
+mod map_serializer;
+mod variant_deserializer;
+mod ext_deserializer;
+mod seq_deserializer;
+
 mod ser;
 mod de;
 
-// include serde generated code
-include!(concat!(env!("OUT_DIR"), "/serde_types.rs"));
-
-/// Parse V out of a byte stream.
+/// Parse V out of a stream of bytes.
 pub fn from_iter<I, V>(mut iter: I) -> Result<V, error::Error>
-    where I: Iterator<Item=u8>, V: serde::Deserialize {
-    let mut de = Deserializer::new(|buf: &mut [u8]| {
+    where I: Iterator<Item = u8>,
+          V: serde::de::DeserializeOwned
+{
+    let mut de = Deserializer::new(read::CopyRead::new(|buf: &mut [u8]| {
         for i in 0..buf.len() {
             if let Some(byte) = iter.next() {
                 buf[i] = byte;
             } else {
-                return Err(error::Error::simple(error::Reason::EndOfStream));
+                return Err(error::Error::EndOfStream);
             }
         }
 
         Ok(())
-    });
+    }));
 
     V::deserialize(&mut de)
 }
 
 /// Parse V out of a slice of bytes.
-pub fn from_bytes<V>(bytes: &[u8]) -> Result<V, error::Error>
-    where V: serde::Deserialize {
+pub fn from_bytes<'a, V>(bytes: &'a [u8]) -> Result<V, error::Error>
+    where V: serde::Deserialize<'a>
+{
     let mut position: usize = 0;
 
-    let mut de = Deserializer::new(|buf: &mut [u8]| {
-        if position + buf.len() > bytes.len() {
-            Err(error::Error::simple(error::Reason::EndOfStream))
-        } else {
-            let len = buf.len();
-            buf.clone_from_slice(&bytes[position..position + len]);
-            position += buf.len();
-            Ok(())
-        }
-    });
+    let mut de = Deserializer::new(read::BorrowRead::new(|len: usize| if position + len >
+                                                                         bytes.len() {
+        Err(error::Error::EndOfStream)
+    } else {
+        let result = &bytes[position..position + len];
+
+        position += len;
+
+        Ok(result)
+    }));
 
     V::deserialize(&mut de)
 }
 
 /// Serialize V into a byte buffer.
 pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
-    where V: serde::Serialize {
+    where V: serde::Serialize
+{
     let mut bytes = vec![];
 
     {
@@ -94,23 +104,24 @@ pub fn to_bytes<V>(value: V) -> Result<Vec<u8>, error::Error>
 
 #[cfg(test)]
 mod test {
-    use serde::{Serialize, Deserialize};
+    use serde::Serialize;
+    use serde::de::DeserializeOwned;
     use std::fmt::Debug;
 
-    use ::test_types::T;
-    // #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
-    // enum T {
-    //     A(usize),
-    //     B,
-    //     C(i8, i8),
-    //     D { a: isize, b: String },
-    // }
+    #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
+    enum T {
+        A(usize),
+        B,
+        C(i8, i8),
+        D { a: isize, b: String },
+    }
 
     fn test_through<T>(expected: T)
-        where T: Serialize + Deserialize + PartialEq + Debug {
-        let x = ::to_bytes(&expected).expect("Failed to serialize expected");
+        where T: Serialize + DeserializeOwned + PartialEq + Debug
+    {
+        let x = ::to_bytes(&expected).expect("Failed to serialize");
 
-        let actual = ::from_bytes(&x).expect("Failed to deserialize expected");
+        let actual = ::from_bytes(&x).expect("Failed to deserialize");
 
         assert_eq!(expected, actual);
     }
@@ -137,6 +148,24 @@ mod test {
 
     #[test]
     fn test_enum_struct() {
-        test_through(T::D { a: 9001, b: "Hello world!".into() })
+        test_through(T::D {
+            a: 9001,
+            b: "Hello world!".into(),
+        })
+    }
+
+    #[test]
+    fn test_option() {
+        test_through(Some(7))
+    }
+
+    #[test]
+    fn test_unit_option() {
+        test_through(Some(()))
+    }
+
+    #[test]
+    fn test_char() {
+        test_through('b')
     }
 }

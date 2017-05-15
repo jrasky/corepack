@@ -1,5 +1,5 @@
 # corepack
-A no_std support for messagepack in serde
+A better messagepack implementation for serde
 
 [Documentation](https://docs.rs/corepack)
 
@@ -7,16 +7,15 @@ A no_std support for messagepack in serde
 
 To use:
 ```toml
-corepack = "0.1"
+corepack = "~0.2.0"
 ```
 
-Note: if you want to use corepack with a `std` serde, enable the `std` feature.
+If you want to use corepack in a `no_std` environment (nightly rust required),
+disable the "std" feature and enable the "collections" feature:
 
 ```toml
-corepack = { version = "0.1", features = ["std"] }
+corepack = { version = "~0.2.0", default-features = false, features = ["collections"] }
 ```
 
-Note: this package uses serde 0.8, and so requires patches to serde to be able
-to use the `#[derive(Serialize, Deserialize)]` successfully in certain
-situations in a `no_std` environment. Changes to update it to serde 0.9 are
-forthcoming.
+You _must_ choose either "std" or "collections" as a feature. Corepack currently
+requires dynamic allocations in a few situations.
