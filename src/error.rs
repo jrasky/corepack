@@ -5,8 +5,12 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use std::fmt::Display;
 
+#[cfg(feature = "collections")]
 use collections::String;
+
+#[cfg(feature = "collections")]
 use collections::string::ToString;
+
 use std::str::Utf8Error;
 
 use std::fmt;

@@ -3,6 +3,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
+#[cfg(feature = "collections")]
 use collections::Vec;
 
 use std::marker::PhantomData;
@@ -444,8 +445,12 @@ impl<'de, 'a, R: Read<'de>> serde::Deserializer<'de> for &'a mut Deserializer<'d
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "collections")]
     use collections::{String, Vec};
+    #[cfg(feature = "collections")]
     use collections::btree_map::BTreeMap;
+    #[cfg(feature = "std")]
+    use std::collections::BTreeMap;
 
     #[test]
     fn positive_fixint_test() {

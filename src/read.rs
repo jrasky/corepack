@@ -5,6 +5,7 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use std::ops::Deref;
 
+#[cfg(feature = "collections")]
 use collections::vec::Vec;
 
 use error::Error;
@@ -46,13 +47,13 @@ impl<'de, 'a> Deref for Reference<'de, 'a> {
 }
 
 impl<'de, F: FnMut(usize) -> Result<&'de [u8], Error>> BorrowRead<'de, F> {
-    pub const fn new(thunk: F) -> BorrowRead<'de, F> {
+    pub fn new(thunk: F) -> BorrowRead<'de, F> {
         BorrowRead { thunk: thunk }
     }
 }
 
 impl<F: FnMut(&mut [u8]) -> Result<(), Error>> CopyRead<F> {
-    pub const fn new(thunk: F) -> CopyRead<F> {
+    pub fn new(thunk: F) -> CopyRead<F> {
         CopyRead { thunk: thunk }
     }
 }
