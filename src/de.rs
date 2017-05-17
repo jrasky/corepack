@@ -169,6 +169,14 @@ impl<'de, R: Read<'de>> Deserializer<'de, R> {
                 let buf = self.input(U64_BYTES)?;
                 visitor.visit_i64(BigEndian::read_i64(&buf))
             }
+            FLOAT32 => {
+                let buf = self.input(U32_BYTES)?;
+                visitor.visit_f32(BigEndian::read_f32(&buf))
+            }
+            FLOAT64 => {
+                let buf = self.input(U64_BYTES)?;
+                visitor.visit_f64(BigEndian::read_f64(&buf))
+            }
             FIXEXT1 => {
                 let ty: i8 = read_signed(self.input(1)?[0]);
 
@@ -463,6 +471,12 @@ mod test {
     fn uint8_test() {
         let value: u8 = ::from_bytes(&[0xcc, 0x9a]).unwrap();
         assert_eq!(value, 154);
+    }
+
+    #[test]
+    fn f64_test() {
+        let value: f64 = ::from_bytes(&[0xcb, 0x40, 0x59, 0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(value, 100.0);
     }
 
     #[test]
