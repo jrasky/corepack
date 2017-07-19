@@ -5,8 +5,8 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use std::ops::Deref;
 
-#[cfg(feature = "collections")]
-use collections::vec::Vec;
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 
 use error::Error;
 

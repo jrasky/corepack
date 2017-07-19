@@ -10,14 +10,14 @@ keywords = ["messagepack", "binary", "encoding", "serialize"]
 license = "MPL-2.0"
 
 [dependencies]
-serde = { version = "~1.0.7", default-features = false }
+serde = { version = "~1.0.10", default-features = false }
 byteorder = { version = "~1.0", default-features = false }
 
 [dev-dependencies]
-serde_derive = "~1.0.7"
+serde_derive = "~1.0.10"
 
 [features]
 default = ["std"]
 
 std = ["serde/std"]
-collections = ["serde/collections"]
+alloc = ["serde/alloc"]
