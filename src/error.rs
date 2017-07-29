@@ -5,11 +5,11 @@
 // obtain one at https://mozilla.org/MPL/2.0/.
 use std::fmt::Display;
 
-#[cfg(feature = "collections")]
-use collections::String;
+#[cfg(feature = "alloc")]
+use alloc::String;
 
-#[cfg(feature = "collections")]
-use collections::string::ToString;
+#[cfg(feature = "alloc")]
+use alloc::string::ToString;
 
 use std::str::Utf8Error;
 

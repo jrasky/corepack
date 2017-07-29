@@ -4,8 +4,7 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
 
-#![cfg_attr(feature = "collections", feature(collections))]
-#![cfg_attr(feature = "collections", feature(alloc))]
+#![cfg_attr(feature = "alloc", feature(alloc))]
 #![allow(overflowing_literals)]
 
 // testing requires std to be available
@@ -18,15 +17,12 @@ extern crate byteorder;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(feature = "collections")]
+#[cfg(feature = "alloc")]
 #[macro_use]
-extern crate collections;
-
-#[cfg(feature = "collections")]
 extern crate alloc;
 
-#[cfg(feature = "collections")]
-use collections::Vec;
+#[cfg(feature = "alloc")]
+use alloc::Vec;
 
 pub use ser::Serializer;
 pub use de::Deserializer;
