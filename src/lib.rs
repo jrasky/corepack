@@ -103,6 +103,7 @@ mod test {
     use serde::Serialize;
     use serde::de::DeserializeOwned;
     use std::fmt::Debug;
+    use std::ffi::CString;
 
     #[derive(PartialEq, Eq, Debug, Serialize, Deserialize)]
     enum T {
@@ -112,34 +113,37 @@ mod test {
         D { a: isize, b: String },
     }
 
-    fn test_through<T>(expected: T)
+    fn test_through<T>(item: T, expected: &[u8])
         where T: Serialize + DeserializeOwned + PartialEq + Debug
     {
-        let x = ::to_bytes(&expected).expect("Failed to serialize");
+        let actual = ::to_bytes(&item).expect("Failed to serialize");
 
-        let actual = ::from_bytes(&x).expect("Failed to deserialize");
+        assert_eq!(expected, &*actual);
 
-        assert_eq!(expected, actual);
+        let deserialized_item = ::from_bytes(&actual).expect("Failed to deserialize");
+        
+        assert_eq!(item, deserialized_item);
     }
 
     #[test]
     fn test_str() {
-        test_through(format!("Hello World!"))
+        test_through(format!("Hello World!"),
+            &[0xac, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21]);
     }
 
     #[test]
     fn test_enum() {
-        test_through(T::B)
+        test_through(T::B, &[0x92, 0x01, 0xc0])
     }
 
     #[test]
     fn test_enum_newtype() {
-        test_through(T::A(42))
+        test_through(T::A(42), &[0x92, 0x00, 0x2a])
     }
 
     #[test]
     fn test_enum_tuple() {
-        test_through(T::C(-3, 22))
+        test_through(T::C(-3, 22), &[0x92, 0x02, 0x92, 0xfd, 0x16])
     }
 
     #[test]
@@ -147,21 +151,53 @@ mod test {
         test_through(T::D {
             a: 9001,
             b: "Hello world!".into(),
-        })
+        }, &[0x92, // array with two elements
+                0x03, // 3 (variant index)
+                0x82, // map with two entries
+                    0xa1, 0x61, // entry one, fixstr length one: 'a'
+                        0xd1, 0x23, 0x29, // i16: 9001
+                    0xa1, 0x62, // entry two, fixstr length one: 'b'
+                        // fixstr, length 12: Hello world!
+                        0xac, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21])
     }
 
     #[test]
     fn test_option() {
-        test_through(Some(7))
+        test_through(Some(7), &[0x92, 0xc3, 0x07])
+    }
+
+    #[test]
+    fn test_option_none() {
+        test_through::<Option<usize>>(None, &[0x91, 0xc2])
     }
 
     #[test]
     fn test_unit_option() {
-        test_through(Some(()))
+        test_through(Some(()), &[0x92, 0xc3, 0xc0])
     }
 
     #[test]
     fn test_char() {
-        test_through('b')
+        test_through('b', &[0xa1, 0x62])
+    }
+
+    #[test]
+    fn test_false() {
+        test_through(false, &[0xc2])
+    }
+
+    #[test]
+    fn test_byte_array() {
+        test_through(CString::new("hello").unwrap(), &[0xc4, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f])
+    }
+
+    #[test]
+    fn test_float() {
+        test_through(4.5, &[0xcb, 0x40, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+    }
+
+    #[test]
+    fn test_float32() {
+        test_through(3.2f32, &[0xca, 0x40, 0x4c, 0xcc, 0xcd])
     }
 }
