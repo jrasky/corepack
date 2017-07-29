@@ -121,14 +121,15 @@ mod test {
         assert_eq!(expected, &*actual);
 
         let deserialized_item = ::from_bytes(&actual).expect("Failed to deserialize");
-        
+
         assert_eq!(item, deserialized_item);
     }
 
     #[test]
     fn test_str() {
         test_through(format!("Hello World!"),
-            &[0xac, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64, 0x21]);
+                     &[0xac, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x57, 0x6f, 0x72, 0x6c, 0x64,
+                       0x21]);
     }
 
     #[test]
@@ -149,16 +150,32 @@ mod test {
     #[test]
     fn test_enum_struct() {
         test_through(T::D {
-            a: 9001,
-            b: "Hello world!".into(),
-        }, &[0x92, // array with two elements
-                0x03, // 3 (variant index)
-                0x82, // map with two entries
-                    0xa1, 0x61, // entry one, fixstr length one: 'a'
-                        0xd1, 0x23, 0x29, // i16: 9001
-                    0xa1, 0x62, // entry two, fixstr length one: 'b'
-                        // fixstr, length 12: Hello world!
-                        0xac, 0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64, 0x21])
+                         a: 9001,
+                         b: "Hello world!".into(),
+                     },
+                     &[0x92, // array with two elements
+                       0x03, // 3 (variant index)
+                       0x82, // map with two entries
+                       0xa1, // entry one, fixstr length one: 'a'
+                       0x61,
+                       0xd1, // i16: 9001
+                       0x23,
+                       0x29,
+                       0xa1, // entry two, fixstr length one: 'b'
+                       0x62,
+                       0xac, // fixstr, length 12: Hello world!
+                       0x48,
+                       0x65,
+                       0x6c,
+                       0x6c,
+                       0x6f,
+                       0x20,
+                       0x77,
+                       0x6f,
+                       0x72,
+                       0x6c,
+                       0x64,
+                       0x21])
     }
 
     #[test]
@@ -188,7 +205,8 @@ mod test {
 
     #[test]
     fn test_byte_array() {
-        test_through(CString::new("hello").unwrap(), &[0xc4, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f])
+        test_through(CString::new("hello").unwrap(),
+                     &[0xc4, 0x05, 0x68, 0x65, 0x6c, 0x6c, 0x6f])
     }
 
     #[test]

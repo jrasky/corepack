@@ -36,17 +36,31 @@ pub struct InclusiveRange<T> {
     pub end: T,
 }
 
-impl<T> InclusiveRange<T> where T: PartialOrd {
+impl<T> InclusiveRange<T>
+    where T: PartialOrd
+{
     pub fn contains(&self, idx: T) -> bool {
         (self.start <= idx) && (idx <= self.end)
     }
 }
 
 // byte defs
-pub const POS_FIXINT: InclusiveRange<u8> = InclusiveRange { start: 0x00, end: 0x7f };
-pub const FIXMAP: InclusiveRange<u8> = InclusiveRange { start: 0x80, end: 0x8f };
-pub const FIXARRAY: InclusiveRange<u8> = InclusiveRange { start: 0x90, end: 0x9f };
-pub const FIXSTR: InclusiveRange<u8> = InclusiveRange { start: 0xa0, end: 0xbf };
+pub const POS_FIXINT: InclusiveRange<u8> = InclusiveRange {
+    start: 0x00,
+    end: 0x7f,
+};
+pub const FIXMAP: InclusiveRange<u8> = InclusiveRange {
+    start: 0x80,
+    end: 0x8f,
+};
+pub const FIXARRAY: InclusiveRange<u8> = InclusiveRange {
+    start: 0x90,
+    end: 0x9f,
+};
+pub const FIXSTR: InclusiveRange<u8> = InclusiveRange {
+    start: 0xa0,
+    end: 0xbf,
+};
 
 pub const NIL: u8 = 0xc0;
 // RESERVED: 0xc1
@@ -81,7 +95,10 @@ pub const ARRAY32: u8 = 0xdd;
 pub const MAP16: u8 = 0xde;
 pub const MAP32: u8 = 0xdf;
 
-pub const NEG_FIXINT: InclusiveRange<u8> = InclusiveRange { start: 0xe0, end: 0xff};
+pub const NEG_FIXINT: InclusiveRange<u8> = InclusiveRange {
+    start: 0xe0,
+    end: 0xff,
+};
 
 // bit masks
 pub const FIXMAP_MASK: u8 = 0b1000_0000;
