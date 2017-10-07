@@ -1,6 +1,6 @@
 [package]
 name = "corepack"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Jerome Rasky <jyrome.112@gmail.com>"]
 description = "A no_std support for messagepack in serde"
 documentation = "https://docs.rs/corepack"
