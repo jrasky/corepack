@@ -34,7 +34,7 @@ impl<'de, 'a, R: Read<'de>> EnumAccess<'de> for VariantDeserializer<'de, 'a, R> 
     type Error = Error;
     type Variant = VariantDeserializer<'de, 'a, R>;
 
-    fn variant_seed<V>(mut self, seed: V) -> Result<(V::Value, Self::Variant), Error>
+    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Error>
         where V: DeserializeSeed<'de>
     {
         // get the variant index with a one-item tuple
