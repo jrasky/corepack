@@ -22,7 +22,7 @@ extern crate serde_derive;
 extern crate alloc;
 
 #[cfg(feature = "alloc")]
-use alloc::Vec;
+use alloc::vec::Vec;
 
 pub use ser::Serializer;
 pub use de::Deserializer;
