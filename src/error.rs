@@ -6,7 +6,7 @@
 use std::fmt::Display;
 
 #[cfg(feature = "alloc")]
-use alloc::String;
+use alloc::string::String;
 
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
