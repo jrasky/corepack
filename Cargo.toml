@@ -1,6 +1,6 @@
 [package]
 name = "corepack"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Jerome Rasky <jyrome.112@gmail.com>"]
 description = "A no_std support for messagepack in serde"
 documentation = "https://docs.rs/corepack"
@@ -11,7 +11,7 @@ license = "MPL-2.0"
 
 [dependencies]
 serde = { version = "~1.0.10", default-features = false }
-byteorder = { version = "1.0", default-features = false }
+byteorder = { version = "~1.2.3", default-features = false }
 
 [dev-dependencies]
 serde_derive = "~1.0.10"
